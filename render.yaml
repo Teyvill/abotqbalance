@@ -1,0 +1,31 @@
+# Render deployment blueprint for the ABOT Lore Tracker.
+# Deploy by connecting this repo to Render (New > Blueprint) — Render reads
+# this file and provisions the service.
+services:
+  - type: web
+    name: abot-lore-tracker
+    runtime: python
+    # NOTE: a persistent disk (below) requires a paid instance. On the free
+    # plan remove the `disk:` block — but then SQLite data is wiped on every
+    # restart/redeploy, which you almost certainly do not want for real data.
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    # Single worker: SQLite is file-based, so one writer avoids lock
+    # contention. Threads give light concurrency for this internal tool.
+    startCommand: gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
+    envVars:
+      # The password required to delete bosses, locations, branches, statuses.
+      # Marked sync:false so you set it as a secret in the Render dashboard.
+      - key: DELETE_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      # Keep the SQLite file on the persistent disk mounted below.
+      - key: DATABASE_PATH
+        value: /var/data/abot.db
+    disk:
+      name: abot-data
+      mountPath: /var/data
+      sizeGB: 1

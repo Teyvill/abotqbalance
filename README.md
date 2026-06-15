@@ -47,6 +47,26 @@ Deleting a boss, location, branch, or status requires the `DELETE_PASSWORD`
 from `.env`. A confirmation modal asks for the password; a wrong password
 shows an error and deletes nothing.
 
+## Deploying to Render
+
+This app needs a host that runs Python with a persistent disk for the SQLite
+file. (It cannot run on Netlify — Netlify has no Python function runtime and no
+persistent filesystem.) A `render.yaml` blueprint is included:
+
+1. Push this repo to GitHub.
+2. In Render: **New > Blueprint**, point it at this repo. Render reads
+   `render.yaml` and provisions a web service.
+3. Set the **`DELETE_PASSWORD`** environment variable (a secret) in the Render
+   dashboard. `SECRET_KEY` is generated automatically.
+4. Deploy. The SQLite database lives on the mounted disk at
+   `/var/data/abot.db` (via the `DATABASE_PATH` env var) so it survives
+   restarts and redeploys.
+
+**Important:** a persistent disk requires a **paid** Render instance (the
+`plan: starter` in `render.yaml`). On the free plan, remove the `disk:` block —
+but then the database is wiped on every restart/redeploy, so only do that for
+throwaway testing.
+
 ## Notes
 
 - The 12 lore stats are seeded on first run in a fixed order and cannot be

@@ -7,7 +7,12 @@ the fixed list of lore stats is seeded once.
 import os
 import sqlite3
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "abot.db")
+# Database location. In production (e.g. Render) point DATABASE_PATH at a
+# persistent disk so data survives restarts; locally it defaults to a file
+# next to the code.
+DB_PATH = os.environ.get("DATABASE_PATH") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "abot.db"
+)
 
 # Fixed lore stats in their canonical display order. Seeded once and never
 # edited from the UI.
@@ -37,7 +42,12 @@ def get_db():
 
 def init_db():
     """Create tables if needed and seed the fixed lore stats."""
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = get_db()
+    # WAL improves concurrency when gunicorn serves with multiple threads.
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS lore_stats (
@@ -94,12 +104,11 @@ def init_db():
     )
 
     # Seed the fixed lore stats once, preserving their canonical order.
+    # INSERT OR IGNORE keeps this idempotent even if init runs concurrently.
     existing = conn.execute("SELECT COUNT(*) AS n FROM lore_stats").fetchone()["n"]
     if existing == 0:
-        conn.executemany(
-            "INSERT INTO lore_stats (name) VALUES (?)",
-            [(name,) for name in LORE_STATS],
-        )
+        for name in LORE_STATS:
+            conn.execute("INSERT OR IGNORE INTO lore_stats (name) VALUES (?)", (name,))
 
     conn.commit()
     conn.close()
