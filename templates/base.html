@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ABOT Lore Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <span class="brand">ABOT Lore Tracker</span>
+        <nav>
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('branches') }}">Branches</a>
+            <a href="{{ url_for('statuses') }}">Statuses</a>
+            <a href="{{ url_for('reference') }}">Reference</a>
+        </nav>
+    </header>
+
+    <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flashes">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Reusable delete confirmation modal: password protected. -->
+    <div id="delete-modal" class="modal-overlay" hidden>
+        <div class="modal">
+            <h3>Confirm deletion</h3>
+            <p id="delete-modal-text">Enter the delete password to continue.</p>
+            <form id="delete-form" method="post">
+                <input type="password" name="password" id="delete-password"
+                       placeholder="Delete password" autocomplete="off" required>
+                <div class="modal-actions">
+                    <button type="button" class="btn" id="delete-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/delete-modal.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

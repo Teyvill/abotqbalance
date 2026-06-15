@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Edit branch — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('branches') }}">&larr; Back to branches</a></p>
+<h1>Edit branch: {{ branch_label }}</h1>
+<p class="muted">{{ branch.type | capitalize }} branch{% if branch.notes %} — {{ branch.notes }}{% endif %}</p>
+
+<form method="post">
+    <!-- Section 1: Lore stat usage -->
+    <section class="card">
+        <h2>1. Lore stat usage</h2>
+        <table class="data-table">
+            <thead>
+                <tr><th>Stat</th><th>Count</th></tr>
+            </thead>
+            <tbody>
+                {% for stat in stats %}
+                <tr>
+                    <td>{{ stat.name }}</td>
+                    <td>
+                        <input type="number" name="stat_{{ stat.id }}" min="0"
+                               value="{{ stat.count }}" class="count-input">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Section 2: Status usage -->
+    <section class="card">
+        <h2>2. Status usage</h2>
+        <p class="muted">Statuses that are used in this branch and how often.</p>
+
+        {% if all_statuses %}
+        <div class="add-row">
+            <select id="status-usage-picker">
+                {% for s in all_statuses %}
+                <option value="{{ s.id }}" data-name="{{ s.name }}">{{ s.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="number" id="status-usage-count" min="1" value="1" class="count-input">
+            <button type="button" class="btn" id="status-usage-add">Add</button>
+        </div>
+
+        <table class="data-table" id="status-usage-table">
+            <thead>
+                <tr><th>Status</th><th>Count</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for su in status_usages %}
+                <tr>
+                    <td>
+                        {{ su.name }}
+                        <input type="hidden" name="status_usage_id" value="{{ su.status_id }}">
+                    </td>
+                    <td>
+                        <input type="number" name="status_usage_count" min="1"
+                               value="{{ su.count }}" class="count-input">
+                    </td>
+                    <td><button type="button" class="btn btn-danger row-remove">Remove</button></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No statuses exist yet. Add some on the Statuses page first.</p>
+        {% endif %}
+    </section>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>
+
+<!-- Section 3: Status acquisition (read-only) -->
+<section class="card">
+    <h2>3. Status acquisition</h2>
+    <p class="muted">
+        Statuses that can be acquired in this branch. Managed from the
+        <a href="{{ url_for('statuses') }}">Statuses</a> page.
+    </p>
+    {% if acquirable %}
+    <ul class="plain-list">
+        {% for s in acquirable %}
+        <li>{{ s.name }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No statuses list this branch as an acquisition source.</p>
+    {% endif %}
+</section>
+
+<script>
+    // Section 2: client-side add/remove of status usage rows before saving.
+    (function () {
+        const picker = document.getElementById("status-usage-picker");
+        const countInput = document.getElementById("status-usage-count");
+        const addBtn = document.getElementById("status-usage-add");
+        const tableBody = document.querySelector("#status-usage-table tbody");
+        if (!addBtn) return;
+
+        function existingIds() {
+            return Array.from(
+                tableBody.querySelectorAll('input[name="status_usage_id"]')
+            ).map((el) => el.value);
+        }
+
+        function bindRemove(btn) {
+            btn.addEventListener("click", function () {
+                btn.closest("tr").remove();
+            });
+        }
+
+        tableBody.querySelectorAll(".row-remove").forEach(bindRemove);
+
+        addBtn.addEventListener("click", function () {
+            const option = picker.options[picker.selectedIndex];
+            if (!option) return;
+            const id = option.value;
+            const name = option.dataset.name;
+            const count = parseInt(countInput.value, 10);
+            if (!count || count < 1) return;
+            if (existingIds().includes(id)) {
+                // Already in the list — bump its count instead of duplicating.
+                const hidden = tableBody.querySelector(
+                    'input[name="status_usage_id"][value="' + id + '"]'
+                );
+                const countCell = hidden
+                    .closest("tr")
+                    .querySelector('input[name="status_usage_count"]');
+                countCell.value = parseInt(countCell.value, 10) + count;
+                return;
+            }
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+                '<td>' + name +
+                '<input type="hidden" name="status_usage_id" value="' + id + '"></td>' +
+                '<td><input type="number" name="status_usage_count" min="1" value="' +
+                count + '" class="count-input"></td>' +
+                '<td><button type="button" class="btn btn-danger row-remove">Remove</button></td>';
+            tableBody.appendChild(tr);
+            bindRemove(tr.querySelector(".row-remove"));
+        });
+    })();
+</script>
+{% endblock %}

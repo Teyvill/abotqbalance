@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Reference — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<h1>Reference data</h1>
+
+<div class="two-col">
+    <section class="card">
+        <h2>Bosses</h2>
+        {% if bosses %}
+        <table class="data-table">
+            <tbody>
+                {% for boss in bosses %}
+                <tr>
+                    <td>{{ boss.name }}</td>
+                    <td class="row-actions">
+                        <button type="button" class="btn btn-danger"
+                                data-delete-action="{{ url_for('delete_boss', boss_id=boss.id) }}"
+                                data-delete-label="boss &quot;{{ boss.name }}&quot;">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No bosses yet.</p>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('add_boss') }}" class="add-row">
+            <input type="text" name="name" placeholder="Boss name" required>
+            <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Locations</h2>
+        {% if locations %}
+        <table class="data-table">
+            <tbody>
+                {% for loc in locations %}
+                <tr>
+                    <td>{{ loc.name }}</td>
+                    <td class="row-actions">
+                        <button type="button" class="btn btn-danger"
+                                data-delete-action="{{ url_for('delete_location', location_id=loc.id) }}"
+                                data-delete-label="location &quot;{{ loc.name }}&quot;">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No locations yet.</p>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('add_location') }}" class="add-row">
+            <input type="text" name="name" placeholder="Location name" required>
+            <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+    </section>
+</div>
+{% endblock %}

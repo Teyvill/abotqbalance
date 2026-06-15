@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Edit status — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('statuses') }}">&larr; Back to statuses</a></p>
+<h1>Edit status: {{ status.name }}</h1>
+
+<section class="card">
+    <form method="post" class="stacked-form">
+        <label>
+            Name
+            <input type="text" name="name" value="{{ status.name }}" required>
+        </label>
+        <label>
+            Description
+            <textarea name="description" rows="3">{{ status.description or "" }}</textarea>
+        </label>
+        <fieldset class="checkbox-group">
+            <legend>Acquirable in</legend>
+            {% if branches %}
+                {% for b in branches %}
+                <label class="checkbox">
+                    <input type="checkbox" name="branch_ids" value="{{ b.id }}"
+                           {% if b.id in acquire_ids %}checked{% endif %}>
+                    {{ b.label }} ({{ b.type }})
+                </label>
+                {% endfor %}
+            {% else %}
+                <p class="empty">No branches exist yet.</p>
+            {% endif %}
+        </fieldset>
+        <button type="submit" class="btn btn-primary">Save status</button>
+    </form>
+</section>
+{% endblock %}

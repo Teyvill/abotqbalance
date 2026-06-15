@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="tabs">
+    <button class="tab active" data-tab="stats">Lore Stats</button>
+    <button class="tab" data-tab="statuses">Statuses</button>
+</div>
+
+<!-- Tab 1: Lore Stats -->
+<section class="tab-panel" id="panel-stats">
+    <div class="filters" data-target="stats">
+        <label>
+            Branch type
+            <select class="f-branch-type">
+                <option value="all">All</option>
+                <option value="personal">Personal</option>
+                <option value="location">Location</option>
+            </select>
+        </label>
+        <label>
+            Boss
+            <select class="f-boss">
+                <option value="">All bosses</option>
+                {% for boss in bosses %}
+                <option value="{{ boss.id }}">{{ boss.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Location
+            <select class="f-location">
+                <option value="">All locations</option>
+                {% for loc in locations %}
+                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button type="button" class="btn f-reset">Reset filters</button>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="stats-chart"></canvas>
+    </div>
+</section>
+
+<!-- Tab 2: Statuses -->
+<section class="tab-panel" id="panel-statuses" hidden>
+    <div class="filters" data-target="statuses">
+        <label>
+            Branch type
+            <select class="f-branch-type">
+                <option value="all">All</option>
+                <option value="personal">Personal</option>
+                <option value="location">Location</option>
+            </select>
+        </label>
+        <label>
+            Boss
+            <select class="f-boss">
+                <option value="">All bosses</option>
+                {% for boss in bosses %}
+                <option value="{{ boss.id }}">{{ boss.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Location
+            <select class="f-location">
+                <option value="">All locations</option>
+                {% for loc in locations %}
+                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button type="button" class="btn f-reset">Reset filters</button>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="statuses-chart"></canvas>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

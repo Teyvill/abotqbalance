@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Branches — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<h1>Branches</h1>
+
+<section class="card">
+    <h2>Existing branches</h2>
+    {% if branches %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Boss / Location</th>
+                <th>Stat total</th>
+                <th>Status total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in branches %}
+            <tr>
+                <td>{{ b.type | capitalize }}</td>
+                <td>{{ b.label }}</td>
+                <td>{{ b.stat_total }}</td>
+                <td>{{ b.status_total }}</td>
+                <td class="row-actions">
+                    <a class="btn" href="{{ url_for('edit_branch', branch_id=b.id) }}">Edit</a>
+                    <button type="button" class="btn btn-danger"
+                            data-delete-action="{{ url_for('delete_branch', branch_id=b.id) }}"
+                            data-delete-label="branch &quot;{{ b.label }}&quot;">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No branches yet.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Add a branch</h2>
+    <form method="post" class="stacked-form" id="add-branch-form">
+        <label>
+            Type
+            <select name="type" id="branch-type-select" required>
+                <option value="personal">Personal</option>
+                <option value="location">Location</option>
+            </select>
+        </label>
+
+        <label id="boss-field">
+            Boss
+            <select name="boss_id">
+                <option value="">Select a boss</option>
+                {% for boss in bosses %}
+                <option value="{{ boss.id }}">{{ boss.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label id="location-field" hidden>
+            Location
+            <select name="location_id">
+                <option value="">Select a location</option>
+                {% for loc in locations %}
+                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            Notes (optional)
+            <textarea name="notes" rows="3"></textarea>
+        </label>
+
+        <button type="submit" class="btn btn-primary">Create branch</button>
+    </form>
+</section>
+
+<script>
+    // Toggle boss/location field based on the selected branch type.
+    (function () {
+        const typeSelect = document.getElementById("branch-type-select");
+        const bossField = document.getElementById("boss-field");
+        const locationField = document.getElementById("location-field");
+        function sync() {
+            const isPersonal = typeSelect.value === "personal";
+            bossField.hidden = !isPersonal;
+            locationField.hidden = isPersonal;
+        }
+        typeSelect.addEventListener("change", sync);
+        sync();
+    })();
+</script>
+{% endblock %}

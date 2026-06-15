@@ -1,0 +1,540 @@
+"""ABOT lore tracker — Flask backend.
+
+Tracks lore stat and status usage across quest branches for the ABOT
+narrative team. See db.py for the schema.
+"""
+
+import os
+
+from dotenv import load_dotenv
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+
+from db import get_db, init_db
+
+load_dotenv()
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "abot-dev-secret-key")
+
+init_db()
+
+
+# --------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------
+
+def check_delete_password(supplied):
+    """Return True only if a delete password is configured and matches."""
+    expected = os.environ.get("DELETE_PASSWORD")
+    return bool(expected) and supplied == expected
+
+
+def branch_label(branch):
+    """Human-readable label for a branch row (boss or location name)."""
+    if branch["type"] == "personal":
+        return branch["boss_name"] or "Unknown boss"
+    return branch["location_name"] or "Unknown location"
+
+
+def fetch_branches(conn):
+    """All branches joined with their boss/location names, with totals."""
+    return conn.execute(
+        """
+        SELECT
+            b.id, b.type, b.boss_id, b.location_id, b.notes,
+            bo.name AS boss_name,
+            lo.name AS location_name,
+            (SELECT COALESCE(SUM(count), 0) FROM stat_usage
+                WHERE branch_id = b.id) AS stat_total,
+            (SELECT COALESCE(SUM(count), 0) FROM status_usage
+                WHERE branch_id = b.id) AS status_total
+        FROM branches b
+        LEFT JOIN bosses bo ON bo.id = b.boss_id
+        LEFT JOIN locations lo ON lo.id = b.location_id
+        ORDER BY b.id
+        """
+    ).fetchall()
+
+
+def build_branch_subquery(branch_type, boss_id, location_id):
+    """Build a `SELECT id FROM branches ...` subquery for the active filters."""
+    conditions = []
+    params = []
+    if branch_type in ("personal", "location"):
+        conditions.append("type = ?")
+        params.append(branch_type)
+    if boss_id:
+        conditions.append("boss_id = ?")
+        params.append(boss_id)
+    if location_id:
+        conditions.append("location_id = ?")
+        params.append(location_id)
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    return "SELECT id FROM branches" + where, params
+
+
+def parse_filter_args():
+    """Pull and normalise dashboard filter query parameters."""
+    branch_type = request.args.get("branch_type", "all")
+    if branch_type not in ("personal", "location"):
+        branch_type = "all"
+    boss_id = request.args.get("boss_id", type=int)
+    location_id = request.args.get("location_id", type=int)
+    return branch_type, boss_id, location_id
+
+
+# --------------------------------------------------------------------------
+# Dashboard
+# --------------------------------------------------------------------------
+
+@app.route("/")
+def dashboard():
+    conn = get_db()
+    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
+    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    conn.close()
+    return render_template("dashboard.html", bosses=bosses, locations=locations)
+
+
+@app.route("/api/stats")
+def api_stats():
+    branch_type, boss_id, location_id = parse_filter_args()
+    subquery, params = build_branch_subquery(branch_type, boss_id, location_id)
+    conn = get_db()
+    rows = conn.execute(
+        f"""
+        SELECT ls.id, ls.name,
+               COALESCE(SUM(su.count), 0) AS total
+        FROM lore_stats ls
+        LEFT JOIN stat_usage su
+            ON su.stat_id = ls.id AND su.branch_id IN ({subquery})
+        GROUP BY ls.id
+        ORDER BY ls.id
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+    return jsonify(
+        labels=[r["name"] for r in rows],
+        values=[r["total"] for r in rows],
+    )
+
+
+@app.route("/api/statuses")
+def api_statuses():
+    branch_type, boss_id, location_id = parse_filter_args()
+    subquery, params = build_branch_subquery(branch_type, boss_id, location_id)
+    conn = get_db()
+    rows = conn.execute(
+        f"""
+        SELECT s.id, s.name,
+               COALESCE(SUM(su.count), 0) AS total
+        FROM statuses s
+        LEFT JOIN status_usage su
+            ON su.status_id = s.id AND su.branch_id IN ({subquery})
+        GROUP BY s.id
+        ORDER BY s.name COLLATE NOCASE
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+    return jsonify(
+        labels=[r["name"] for r in rows],
+        values=[r["total"] for r in rows],
+    )
+
+
+# --------------------------------------------------------------------------
+# Branches
+# --------------------------------------------------------------------------
+
+@app.route("/branches", methods=["GET", "POST"])
+def branches():
+    conn = get_db()
+
+    if request.method == "POST":
+        branch_type = request.form.get("type")
+        notes = request.form.get("notes", "").strip()
+        if branch_type not in ("personal", "location"):
+            flash("Please choose a valid branch type.", "error")
+            conn.close()
+            return redirect(url_for("branches"))
+
+        boss_id = None
+        location_id = None
+        if branch_type == "personal":
+            boss_id = request.form.get("boss_id", type=int)
+            if not boss_id:
+                flash("Please choose a boss for a personal branch.", "error")
+                conn.close()
+                return redirect(url_for("branches"))
+        else:
+            location_id = request.form.get("location_id", type=int)
+            if not location_id:
+                flash("Please choose a location for a location branch.", "error")
+                conn.close()
+                return redirect(url_for("branches"))
+
+        cur = conn.execute(
+            "INSERT INTO branches (type, boss_id, location_id, notes) "
+            "VALUES (?, ?, ?, ?)",
+            (branch_type, boss_id, location_id, notes or None),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        conn.close()
+        return redirect(url_for("edit_branch", branch_id=new_id))
+
+    branch_rows = fetch_branches(conn)
+    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
+    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    conn.close()
+
+    branch_list = [
+        {**dict(b), "label": branch_label(b)} for b in branch_rows
+    ]
+    return render_template(
+        "branches.html",
+        branches=branch_list,
+        bosses=bosses,
+        locations=locations,
+    )
+
+
+@app.route("/branches/<int:branch_id>/edit", methods=["GET", "POST"])
+def edit_branch(branch_id):
+    conn = get_db()
+    branch = conn.execute(
+        """
+        SELECT b.*, bo.name AS boss_name, lo.name AS location_name
+        FROM branches b
+        LEFT JOIN bosses bo ON bo.id = b.boss_id
+        LEFT JOIN locations lo ON lo.id = b.location_id
+        WHERE b.id = ?
+        """,
+        (branch_id,),
+    ).fetchone()
+    if branch is None:
+        conn.close()
+        abort(404)
+
+    if request.method == "POST":
+        # Section 1: lore stat usage — upsert one row per stat.
+        stat_ids = [
+            r["id"] for r in conn.execute("SELECT id FROM lore_stats").fetchall()
+        ]
+        for stat_id in stat_ids:
+            count = request.form.get(f"stat_{stat_id}", type=int) or 0
+            if count < 0:
+                count = 0
+            conn.execute(
+                """
+                INSERT INTO stat_usage (branch_id, stat_id, count)
+                VALUES (?, ?, ?)
+                ON CONFLICT (branch_id, stat_id)
+                DO UPDATE SET count = excluded.count
+                """,
+                (branch_id, stat_id, count),
+            )
+
+        # Section 2: status usage — replace the whole set from the form.
+        conn.execute("DELETE FROM status_usage WHERE branch_id = ?", (branch_id,))
+        su_status_ids = request.form.getlist("status_usage_id")
+        su_counts = request.form.getlist("status_usage_count")
+        seen = set()
+        for sid_raw, count_raw in zip(su_status_ids, su_counts):
+            try:
+                sid = int(sid_raw)
+                count = int(count_raw)
+            except (TypeError, ValueError):
+                continue
+            if sid in seen or count <= 0:
+                continue
+            seen.add(sid)
+            conn.execute(
+                "INSERT INTO status_usage (branch_id, status_id, count) "
+                "VALUES (?, ?, ?)",
+                (branch_id, sid, count),
+            )
+
+        conn.commit()
+        conn.close()
+        flash("Branch data saved.", "success")
+        return redirect(url_for("edit_branch", branch_id=branch_id))
+
+    # Section 1 data: every stat with its current count (default 0).
+    stats = conn.execute(
+        """
+        SELECT ls.id, ls.name, COALESCE(su.count, 0) AS count
+        FROM lore_stats ls
+        LEFT JOIN stat_usage su
+            ON su.stat_id = ls.id AND su.branch_id = ?
+        ORDER BY ls.id
+        """,
+        (branch_id,),
+    ).fetchall()
+
+    # Section 2 data: status usages already recorded for this branch.
+    status_usages = conn.execute(
+        """
+        SELECT su.status_id, s.name, su.count
+        FROM status_usage su
+        JOIN statuses s ON s.id = su.status_id
+        WHERE su.branch_id = ?
+        ORDER BY s.name COLLATE NOCASE
+        """,
+        (branch_id,),
+    ).fetchall()
+
+    # Section 3 data (read-only): statuses acquirable in this branch.
+    acquirable = conn.execute(
+        """
+        SELECT s.id, s.name
+        FROM statuses s
+        JOIN status_branch_acquire sba ON sba.status_id = s.id
+        WHERE sba.branch_id = ?
+        ORDER BY s.name COLLATE NOCASE
+        """,
+        (branch_id,),
+    ).fetchall()
+
+    all_statuses = conn.execute(
+        "SELECT id, name FROM statuses ORDER BY name COLLATE NOCASE"
+    ).fetchall()
+    conn.close()
+
+    return render_template(
+        "branch_edit.html",
+        branch=branch,
+        branch_label=branch_label(branch),
+        stats=stats,
+        status_usages=status_usages,
+        acquirable=acquirable,
+        all_statuses=all_statuses,
+    )
+
+
+@app.route("/branches/<int:branch_id>/delete", methods=["POST"])
+def delete_branch(branch_id):
+    if not check_delete_password(request.form.get("password", "")):
+        flash("Incorrect password. Branch was not deleted.", "error")
+        return redirect(url_for("branches"))
+    conn = get_db()
+    conn.execute("DELETE FROM branches WHERE id = ?", (branch_id,))
+    conn.commit()
+    conn.close()
+    flash("Branch deleted.", "success")
+    return redirect(url_for("branches"))
+
+
+# --------------------------------------------------------------------------
+# Statuses
+# --------------------------------------------------------------------------
+
+@app.route("/statuses", methods=["GET", "POST"])
+def statuses():
+    conn = get_db()
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        branch_ids = request.form.getlist("branch_ids", type=int)
+        if not name:
+            flash("A status needs a name.", "error")
+            conn.close()
+            return redirect(url_for("statuses"))
+        cur = conn.execute(
+            "INSERT INTO statuses (name, description) VALUES (?, ?)",
+            (name, description or None),
+        )
+        status_id = cur.lastrowid
+        for bid in branch_ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO status_branch_acquire "
+                "(status_id, branch_id) VALUES (?, ?)",
+                (status_id, bid),
+            )
+        conn.commit()
+        conn.close()
+        flash("Status added.", "success")
+        return redirect(url_for("statuses"))
+
+    status_rows = conn.execute(
+        "SELECT * FROM statuses ORDER BY name COLLATE NOCASE"
+    ).fetchall()
+    branch_rows = fetch_branches(conn)
+    branch_list = [{**dict(b), "label": branch_label(b)} for b in branch_rows]
+    label_by_id = {b["id"]: b["label"] for b in branch_list}
+
+    statuses_view = []
+    for s in status_rows:
+        acquire_ids = [
+            r["branch_id"]
+            for r in conn.execute(
+                "SELECT branch_id FROM status_branch_acquire WHERE status_id = ?",
+                (s["id"],),
+            ).fetchall()
+        ]
+        statuses_view.append(
+            {
+                **dict(s),
+                "branch_labels": [
+                    label_by_id[bid] for bid in acquire_ids if bid in label_by_id
+                ],
+            }
+        )
+    conn.close()
+
+    return render_template(
+        "statuses.html",
+        statuses=statuses_view,
+        branches=branch_list,
+    )
+
+
+@app.route("/statuses/<int:status_id>/edit", methods=["GET", "POST"])
+def edit_status(status_id):
+    conn = get_db()
+    status = conn.execute(
+        "SELECT * FROM statuses WHERE id = ?", (status_id,)
+    ).fetchone()
+    if status is None:
+        conn.close()
+        abort(404)
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        branch_ids = request.form.getlist("branch_ids", type=int)
+        if not name:
+            flash("A status needs a name.", "error")
+            conn.close()
+            return redirect(url_for("edit_status", status_id=status_id))
+        conn.execute(
+            "UPDATE statuses SET name = ?, description = ? WHERE id = ?",
+            (name, description or None, status_id),
+        )
+        conn.execute(
+            "DELETE FROM status_branch_acquire WHERE status_id = ?", (status_id,)
+        )
+        for bid in branch_ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO status_branch_acquire "
+                "(status_id, branch_id) VALUES (?, ?)",
+                (status_id, bid),
+            )
+        conn.commit()
+        conn.close()
+        flash("Status updated.", "success")
+        return redirect(url_for("statuses"))
+
+    branch_rows = fetch_branches(conn)
+    branch_list = [{**dict(b), "label": branch_label(b)} for b in branch_rows]
+    acquire_ids = {
+        r["branch_id"]
+        for r in conn.execute(
+            "SELECT branch_id FROM status_branch_acquire WHERE status_id = ?",
+            (status_id,),
+        ).fetchall()
+    }
+    conn.close()
+
+    return render_template(
+        "status_edit.html",
+        status=status,
+        branches=branch_list,
+        acquire_ids=acquire_ids,
+    )
+
+
+@app.route("/statuses/<int:status_id>/delete", methods=["POST"])
+def delete_status(status_id):
+    if not check_delete_password(request.form.get("password", "")):
+        flash("Incorrect password. Status was not deleted.", "error")
+        return redirect(url_for("statuses"))
+    conn = get_db()
+    conn.execute("DELETE FROM statuses WHERE id = ?", (status_id,))
+    conn.commit()
+    conn.close()
+    flash("Status deleted.", "success")
+    return redirect(url_for("statuses"))
+
+
+# --------------------------------------------------------------------------
+# Reference data (bosses and locations)
+# --------------------------------------------------------------------------
+
+@app.route("/reference")
+def reference():
+    conn = get_db()
+    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
+    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    conn.close()
+    return render_template("reference.html", bosses=bosses, locations=locations)
+
+
+@app.route("/reference/bosses/add", methods=["POST"])
+def add_boss():
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("A boss needs a name.", "error")
+        return redirect(url_for("reference"))
+    conn = get_db()
+    conn.execute("INSERT INTO bosses (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+    flash("Boss added.", "success")
+    return redirect(url_for("reference"))
+
+
+@app.route("/reference/bosses/<int:boss_id>/delete", methods=["POST"])
+def delete_boss(boss_id):
+    if not check_delete_password(request.form.get("password", "")):
+        flash("Incorrect password. Boss was not deleted.", "error")
+        return redirect(url_for("reference"))
+    conn = get_db()
+    conn.execute("DELETE FROM bosses WHERE id = ?", (boss_id,))
+    conn.commit()
+    conn.close()
+    flash("Boss deleted.", "success")
+    return redirect(url_for("reference"))
+
+
+@app.route("/reference/locations/add", methods=["POST"])
+def add_location():
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("A location needs a name.", "error")
+        return redirect(url_for("reference"))
+    conn = get_db()
+    conn.execute("INSERT INTO locations (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+    flash("Location added.", "success")
+    return redirect(url_for("reference"))
+
+
+@app.route("/reference/locations/<int:location_id>/delete", methods=["POST"])
+def delete_location(location_id):
+    if not check_delete_password(request.form.get("password", "")):
+        flash("Incorrect password. Location was not deleted.", "error")
+        return redirect(url_for("reference"))
+    conn = get_db()
+    conn.execute("DELETE FROM locations WHERE id = ?", (location_id,))
+    conn.commit()
+    conn.close()
+    flash("Location deleted.", "success")
+    return redirect(url_for("reference"))
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

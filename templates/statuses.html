@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Statuses — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<h1>Statuses</h1>
+
+<section class="card">
+    <h2>All statuses</h2>
+    {% if statuses %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Acquirable in</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in statuses %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.description or "" }}</td>
+                <td>
+                    {% if s.branch_labels %}
+                        {{ s.branch_labels | join(", ") }}
+                    {% else %}
+                        <span class="muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="row-actions">
+                    <a class="btn" href="{{ url_for('edit_status', status_id=s.id) }}">Edit</a>
+                    <button type="button" class="btn btn-danger"
+                            data-delete-action="{{ url_for('delete_status', status_id=s.id) }}"
+                            data-delete-label="status &quot;{{ s.name }}&quot;">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No statuses yet.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Add a status</h2>
+    <form method="post" class="stacked-form">
+        <label>
+            Name
+            <input type="text" name="name" required>
+        </label>
+        <label>
+            Description
+            <textarea name="description" rows="3"></textarea>
+        </label>
+        <fieldset class="checkbox-group">
+            <legend>Acquirable in</legend>
+            {% if branches %}
+                {% for b in branches %}
+                <label class="checkbox">
+                    <input type="checkbox" name="branch_ids" value="{{ b.id }}">
+                    {{ b.label }} ({{ b.type }})
+                </label>
+                {% endfor %}
+            {% else %}
+                <p class="empty">No branches exist yet.</p>
+            {% endif %}
+        </fieldset>
+        <button type="submit" class="btn btn-primary">Add status</button>
+    </form>
+</section>
+{% endblock %}
