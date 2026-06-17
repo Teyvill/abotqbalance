@@ -45,7 +45,17 @@ def init_db():
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    conn = get_db()
+    # Surface the resolved path so deploy logs show where data is written.
+    # On hosts like Render the code directory is read-only at runtime, so
+    # DATABASE_PATH must point at a writable persistent disk.
+    print(f"[abot] Using database at: {DB_PATH}", flush=True)
+    try:
+        conn = get_db()
+    except sqlite3.OperationalError as exc:
+        raise sqlite3.OperationalError(
+            f"Cannot open database at {DB_PATH!r}: {exc}. "
+            "Set DATABASE_PATH to a writable location (e.g. a mounted disk)."
+        ) from exc
     # WAL improves concurrency when gunicorn serves with multiple threads.
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(
