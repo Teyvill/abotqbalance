@@ -17,9 +17,9 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure the password required for deletions.
+# Configure secrets and login credentials.
 cp .env.example .env
-# then edit .env and set DELETE_PASSWORD
+# then edit .env (SECRET_KEY and the role logins/passwords)
 
 python app.py
 ```
@@ -71,9 +71,8 @@ dashboard's Lore Stats tab has a Method filter (All / Roll / Option).
 
 ## Deletion
 
-Deleting a boss, location, branch, or status requires the `DELETE_PASSWORD`
-from `.env`. A confirmation modal asks for the password; a wrong password
-shows an error and deletes nothing.
+Deleting a boss, location, branch, or status is **admin only**. A confirmation
+modal asks the admin to confirm before the delete goes through.
 
 ## Deploying to Render
 
@@ -84,8 +83,8 @@ persistent filesystem.) A `render.yaml` blueprint is included:
 1. Push this repo to GitHub.
 2. In Render: **New > Blueprint**, point it at this repo. Render reads
    `render.yaml` and provisions a web service.
-3. Set the **`DELETE_PASSWORD`** environment variable (a secret) in the Render
-   dashboard. `SECRET_KEY` is generated automatically.
+3. Set the role login/password environment variables (see Access control) as
+   secrets in the Render dashboard. `SECRET_KEY` is generated automatically.
 4. Deploy. The SQLite database lives on the mounted disk at
    `/var/data/abot.db` (via the `DATABASE_PATH` env var) so it survives
    restarts and redeploys.

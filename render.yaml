@@ -14,9 +14,19 @@ services:
     # contention. Threads give light concurrency for this internal tool.
     startCommand: gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
     envVars:
-      # The password required to delete bosses, locations, branches, statuses.
-      # Marked sync:false so you set it as a secret in the Render dashboard.
-      - key: DELETE_PASSWORD
+      # Login credentials per role. Marked sync:false so you set them as
+      # secrets in the Render dashboard (a role works only if both are set).
+      - key: READER_LOGIN
+        sync: false
+      - key: READER_PASSWORD
+        sync: false
+      - key: EDITOR_LOGIN
+        sync: false
+      - key: EDITOR_PASSWORD
+        sync: false
+      - key: ADMIN_LOGIN
+        sync: false
+      - key: ADMIN_PASSWORD
         sync: false
       - key: SECRET_KEY
         generateValue: true

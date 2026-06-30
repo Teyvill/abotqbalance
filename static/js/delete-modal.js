@@ -1,21 +1,18 @@
-// Shared password-protected delete confirmation modal.
+// Shared delete confirmation modal (deletes are admin only).
 // Any button with data-delete-action opens the modal and, on submit, posts
-// the password to that action URL.
+// to that action URL.
 (function () {
     const modal = document.getElementById("delete-modal");
     if (!modal) return;
 
     const form = document.getElementById("delete-form");
     const text = document.getElementById("delete-modal-text");
-    const passwordInput = document.getElementById("delete-password");
     const cancelBtn = document.getElementById("delete-cancel");
 
     function open(action, label) {
         form.action = action;
-        text.textContent = "Enter the delete password to remove the " + label + ".";
-        passwordInput.value = "";
+        text.textContent = "Are you sure you want to delete the " + label + "?";
         modal.hidden = false;
-        passwordInput.focus();
     }
 
     function close() {

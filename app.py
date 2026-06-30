@@ -161,12 +161,6 @@ def logout():
 # Helpers
 # --------------------------------------------------------------------------
 
-def check_delete_password(supplied):
-    """Return True only if a delete password is configured and matches."""
-    expected = os.environ.get("DELETE_PASSWORD")
-    return bool(expected) and supplied == expected
-
-
 def branch_label(branch):
     """Human-readable label for a branch row (boss or location name)."""
     if branch["type"] == "personal":
@@ -475,9 +469,6 @@ def edit_branch(branch_id):
 @app.route("/branches/<int:branch_id>/delete", methods=["POST"])
 @require_role("admin")
 def delete_branch(branch_id):
-    if not check_delete_password(request.form.get("password", "")):
-        flash("Incorrect password. Branch was not deleted.", "error")
-        return redirect(url_for("branches"))
     conn = get_db()
     conn.execute("DELETE FROM branches WHERE id = ?", (branch_id,))
     conn.commit()
@@ -613,9 +604,6 @@ def edit_status(status_id):
 @app.route("/statuses/<int:status_id>/delete", methods=["POST"])
 @require_role("admin")
 def delete_status(status_id):
-    if not check_delete_password(request.form.get("password", "")):
-        flash("Incorrect password. Status was not deleted.", "error")
-        return redirect(url_for("statuses"))
     conn = get_db()
     conn.execute("DELETE FROM statuses WHERE id = ?", (status_id,))
     conn.commit()
@@ -655,9 +643,6 @@ def add_boss():
 @app.route("/reference/bosses/<int:boss_id>/delete", methods=["POST"])
 @require_role("admin")
 def delete_boss(boss_id):
-    if not check_delete_password(request.form.get("password", "")):
-        flash("Incorrect password. Boss was not deleted.", "error")
-        return redirect(url_for("reference"))
     conn = get_db()
     conn.execute("DELETE FROM bosses WHERE id = ?", (boss_id,))
     conn.commit()
@@ -684,9 +669,6 @@ def add_location():
 @app.route("/reference/locations/<int:location_id>/delete", methods=["POST"])
 @require_role("admin")
 def delete_location(location_id):
-    if not check_delete_password(request.form.get("password", "")):
-        flash("Incorrect password. Location was not deleted.", "error")
-        return redirect(url_for("reference"))
     conn = get_db()
     conn.execute("DELETE FROM locations WHERE id = ?", (location_id,))
     conn.commit()

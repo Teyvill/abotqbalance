@@ -37,14 +37,12 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Reusable delete confirmation modal: password protected. -->
+    <!-- Reusable delete confirmation modal (admin only). -->
     <div id="delete-modal" class="modal-overlay" hidden>
         <div class="modal">
             <h3>Confirm deletion</h3>
-            <p id="delete-modal-text">Enter the delete password to continue.</p>
+            <p id="delete-modal-text">Are you sure you want to delete this?</p>
             <form id="delete-form" method="post">
-                <input type="password" name="password" id="delete-password"
-                       placeholder="Delete password" autocomplete="off" required>
                 <div class="modal-actions">
                     <button type="button" class="btn" id="delete-cancel">Cancel</button>
                     <button type="submit" class="btn btn-danger">Delete</button>
