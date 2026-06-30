@@ -1,10 +1,15 @@
 """ABOT lore tracker — Flask backend.
 
-Tracks lore stat and status usage across quest branches for the ABOT
-narrative team. See db.py for the schema.
+Tracks lore stat (skill) and status usage across quest branches for the ABOT
+narrative team. Skill usage is tracked per method (roll / option). Access is
+protected by a login with three roles (reader, editor, admin). See db.py for
+the schema.
 """
 
+import hmac
 import os
+from datetime import timedelta
+from functools import wraps
 
 from dotenv import load_dotenv
 from flask import (
@@ -15,17 +20,141 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 
-from db import get_db, init_db
+from db import METHODS, get_db, init_db
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "abot-dev-secret-key")
+# Stay logged in for 24 hours after a successful login.
+app.permanent_session_lifetime = timedelta(hours=24)
 
 init_db()
+
+
+# --------------------------------------------------------------------------
+# Authentication and roles
+# --------------------------------------------------------------------------
+
+# Higher number = more privileges. Each role includes everything below it.
+ROLE_LEVELS = {"reader": 1, "editor": 2, "admin": 3}
+
+# Endpoints reachable without being logged in.
+PUBLIC_ENDPOINTS = {"login", "static"}
+
+
+def load_credentials():
+    """Read the configured login/password for each role from the environment.
+
+    A role is only usable if both its *_LOGIN and *_PASSWORD vars are set.
+    """
+    creds = {}
+    for role in ROLE_LEVELS:
+        login = os.environ.get(f"{role.upper()}_LOGIN")
+        password = os.environ.get(f"{role.upper()}_PASSWORD")
+        if login and password:
+            creds[role] = (login, password)
+    return creds
+
+
+def authenticate(login, password):
+    """Return the role matching these credentials, or None.
+
+    Uses constant-time comparison to avoid leaking timing information.
+    """
+    for role, (expected_login, expected_password) in load_credentials().items():
+        login_ok = hmac.compare_digest(login, expected_login)
+        password_ok = hmac.compare_digest(password, expected_password)
+        if login_ok and password_ok:
+            return role
+    return None
+
+
+def has_role(min_role):
+    """True if the logged-in user's role is at least `min_role`."""
+    role = session.get("role")
+    return bool(role) and ROLE_LEVELS.get(role, 0) >= ROLE_LEVELS[min_role]
+
+
+def require_role(min_role):
+    """Decorator: abort with 403 unless the user has at least `min_role`."""
+
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            if not has_role(min_role):
+                abort(403)
+            return view(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+@app.before_request
+def require_login():
+    """Force login for everything except the login page and static files."""
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+    if "role" not in session:
+        return redirect(url_for("login", next=request.path))
+    return None
+
+
+@app.context_processor
+def inject_auth():
+    """Expose role helpers to all templates for showing/hiding controls."""
+    return {
+        "current_role": session.get("role"),
+        "current_user": session.get("user"),
+        "can_edit": has_role("editor"),
+        "can_admin": has_role("admin"),
+    }
+
+
+def _safe_next(target):
+    """Only allow same-site relative redirects after login."""
+    if target and target.startswith("/") and not target.startswith("//"):
+        return target
+    return url_for("dashboard")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    # Already logged in: go straight to the dashboard.
+    if "role" in session and request.method == "GET":
+        return redirect(url_for("dashboard"))
+
+    configured = bool(load_credentials())
+
+    if request.method == "POST":
+        login_value = request.form.get("login", "")
+        password_value = request.form.get("password", "")
+        role = authenticate(login_value, password_value)
+        if role:
+            session.clear()
+            session.permanent = True
+            session["role"] = role
+            session["user"] = login_value
+            return redirect(_safe_next(request.form.get("next")))
+        flash("Incorrect login or password.", "error")
+
+    return render_template(
+        "login.html",
+        next=request.args.get("next", ""),
+        configured=configured,
+    )
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
 
 
 # --------------------------------------------------------------------------
@@ -109,6 +238,13 @@ def dashboard():
 def api_stats():
     branch_type, boss_id, location_id = parse_filter_args()
     subquery, params = build_branch_subquery(branch_type, boss_id, location_id)
+
+    method = request.args.get("method")
+    if method not in METHODS:
+        method = None
+    method_clause = " AND su.method = ?" if method else ""
+    query_params = list(params) + ([method] if method else [])
+
     conn = get_db()
     rows = conn.execute(
         f"""
@@ -116,11 +252,12 @@ def api_stats():
                COALESCE(SUM(su.count), 0) AS total
         FROM lore_stats ls
         LEFT JOIN stat_usage su
-            ON su.stat_id = ls.id AND su.branch_id IN ({subquery})
+            ON su.stat_id = ls.id
+            AND su.branch_id IN ({subquery}){method_clause}
         GROUP BY ls.id
         ORDER BY ls.id
         """,
-        params,
+        query_params,
     ).fetchall()
     conn.close()
     return jsonify(
@@ -162,6 +299,9 @@ def branches():
     conn = get_db()
 
     if request.method == "POST":
+        if not has_role("admin"):
+            conn.close()
+            abort(403)
         branch_type = request.form.get("type")
         notes = request.form.get("notes", "").strip()
         if branch_type not in ("personal", "location"):
@@ -228,23 +368,28 @@ def edit_branch(branch_id):
         abort(404)
 
     if request.method == "POST":
-        # Section 1: lore stat usage — upsert one row per stat.
+        if not has_role("editor"):
+            conn.close()
+            abort(403)
+
+        # Section 1: skill usage — upsert one row per stat per method.
         stat_ids = [
             r["id"] for r in conn.execute("SELECT id FROM lore_stats").fetchall()
         ]
         for stat_id in stat_ids:
-            count = request.form.get(f"stat_{stat_id}", type=int) or 0
-            if count < 0:
-                count = 0
-            conn.execute(
-                """
-                INSERT INTO stat_usage (branch_id, stat_id, count)
-                VALUES (?, ?, ?)
-                ON CONFLICT (branch_id, stat_id)
-                DO UPDATE SET count = excluded.count
-                """,
-                (branch_id, stat_id, count),
-            )
+            for method in METHODS:
+                count = request.form.get(f"stat_{stat_id}_{method}", type=int) or 0
+                if count < 0:
+                    count = 0
+                conn.execute(
+                    """
+                    INSERT INTO stat_usage (branch_id, stat_id, method, count)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (branch_id, stat_id, method)
+                    DO UPDATE SET count = excluded.count
+                    """,
+                    (branch_id, stat_id, method, count),
+                )
 
         # Section 2: status usage — replace the whole set from the form.
         conn.execute("DELETE FROM status_usage WHERE branch_id = ?", (branch_id,))
@@ -271,13 +416,16 @@ def edit_branch(branch_id):
         flash("Branch data saved.", "success")
         return redirect(url_for("edit_branch", branch_id=branch_id))
 
-    # Section 1 data: every stat with its current count (default 0).
+    # Section 1 data: every stat with its roll and option counts (default 0).
     stats = conn.execute(
         """
-        SELECT ls.id, ls.name, COALESCE(su.count, 0) AS count
+        SELECT ls.id, ls.name,
+               COALESCE(MAX(CASE WHEN su.method = 'roll' THEN su.count END), 0) AS roll,
+               COALESCE(MAX(CASE WHEN su.method = 'option' THEN su.count END), 0) AS opt
         FROM lore_stats ls
         LEFT JOIN stat_usage su
             ON su.stat_id = ls.id AND su.branch_id = ?
+        GROUP BY ls.id
         ORDER BY ls.id
         """,
         (branch_id,),
@@ -317,6 +465,7 @@ def edit_branch(branch_id):
         branch=branch,
         branch_label=branch_label(branch),
         stats=stats,
+        methods=METHODS,
         status_usages=status_usages,
         acquirable=acquirable,
         all_statuses=all_statuses,
@@ -324,6 +473,7 @@ def edit_branch(branch_id):
 
 
 @app.route("/branches/<int:branch_id>/delete", methods=["POST"])
+@require_role("admin")
 def delete_branch(branch_id):
     if not check_delete_password(request.form.get("password", "")):
         flash("Incorrect password. Branch was not deleted.", "error")
@@ -345,6 +495,9 @@ def statuses():
     conn = get_db()
 
     if request.method == "POST":
+        if not has_role("admin"):
+            conn.close()
+            abort(403)
         name = request.form.get("name", "").strip()
         description = request.form.get("description", "").strip()
         branch_ids = request.form.getlist("branch_ids", type=int)
@@ -402,6 +555,7 @@ def statuses():
 
 
 @app.route("/statuses/<int:status_id>/edit", methods=["GET", "POST"])
+@require_role("editor")
 def edit_status(status_id):
     conn = get_db()
     status = conn.execute(
@@ -457,6 +611,7 @@ def edit_status(status_id):
 
 
 @app.route("/statuses/<int:status_id>/delete", methods=["POST"])
+@require_role("admin")
 def delete_status(status_id):
     if not check_delete_password(request.form.get("password", "")):
         flash("Incorrect password. Status was not deleted.", "error")
@@ -483,6 +638,7 @@ def reference():
 
 
 @app.route("/reference/bosses/add", methods=["POST"])
+@require_role("admin")
 def add_boss():
     name = request.form.get("name", "").strip()
     if not name:
@@ -497,6 +653,7 @@ def add_boss():
 
 
 @app.route("/reference/bosses/<int:boss_id>/delete", methods=["POST"])
+@require_role("admin")
 def delete_boss(boss_id):
     if not check_delete_password(request.form.get("password", "")):
         flash("Incorrect password. Boss was not deleted.", "error")
@@ -510,6 +667,7 @@ def delete_boss(boss_id):
 
 
 @app.route("/reference/locations/add", methods=["POST"])
+@require_role("admin")
 def add_location():
     name = request.form.get("name", "").strip()
     if not name:
@@ -524,6 +682,7 @@ def add_location():
 
 
 @app.route("/reference/locations/<int:location_id>/delete", methods=["POST"])
+@require_role("admin")
 def delete_location(location_id):
     if not check_delete_password(request.form.get("password", "")):
         flash("Incorrect password. Location was not deleted.", "error")
@@ -534,6 +693,11 @@ def delete_location(location_id):
     conn.close()
     flash("Location deleted.", "success")
     return redirect(url_for("reference"))
+
+
+@app.errorhandler(403)
+def forbidden(_error):
+    return render_template("403.html"), 403
 
 
 if __name__ == "__main__":

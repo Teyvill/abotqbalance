@@ -26,6 +26,34 @@ python app.py
 
 The app runs at http://127.0.0.1:5000.
 
+## Access control
+
+The whole app is behind a login. There are three roles, each with its own
+login/password set via environment variables:
+
+| Role | Can do |
+|------|--------|
+| **Reader** | View everything (read-only) |
+| **Editor** | View, plus edit existing data (branch skill/status usage, existing status details) |
+| **Admin** | Everything, including adding branches/statuses/bosses/locations and deleting |
+
+A successful login lasts **24 hours**. Set these variables (a role is only
+usable if both halves are set):
+
+```
+READER_LOGIN / READER_PASSWORD
+EDITOR_LOGIN / EDITOR_PASSWORD
+ADMIN_LOGIN  / ADMIN_PASSWORD
+```
+
+`SECRET_KEY` must be set and stable so sessions survive restarts.
+
+## Skill usage: roll vs option
+
+Each of the 12 skills is tracked per **method** — `roll` and `option` — for
+every branch. The branch edit page has a Roll and an Option column, and the
+dashboard's Lore Stats tab has a Method filter (All / Roll / Option).
+
 ## Pages
 
 - `/` — Dashboard with two tabs (Lore Stats, Statuses). Each tab has its own
@@ -66,6 +94,18 @@ persistent filesystem.) A `render.yaml` blueprint is included:
 `plan: starter` in `render.yaml`). On the free plan, remove the `disk:` block —
 but then the database is wiped on every restart/redeploy, so only do that for
 throwaway testing.
+
+## Cleaning the database
+
+To wipe all data and start fresh (the lore stats reseed automatically), delete
+the SQLite file and let the app recreate it. On Render, open the service
+**Shell** and run:
+
+```bash
+rm -f /var/data/abot.db /var/data/abot.db-wal /var/data/abot.db-shm
+```
+
+Then restart the service. Locally, delete `abot.db` in the project folder.
 
 ## Notes
 

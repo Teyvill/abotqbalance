@@ -31,6 +31,9 @@ LORE_STATS = [
     "Foolish",
 ]
 
+# Each skill's usage is tracked separately per method.
+METHODS = ("roll", "option")
+
 
 def get_db():
     """Open a connection with row access by column name and foreign keys on."""
@@ -87,8 +90,9 @@ def init_db():
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
             stat_id   INTEGER NOT NULL REFERENCES lore_stats(id) ON DELETE CASCADE,
+            method    TEXT NOT NULL CHECK (method IN ('roll', 'option')),
             count     INTEGER NOT NULL DEFAULT 0,
-            UNIQUE (branch_id, stat_id)
+            UNIQUE (branch_id, stat_id, method)
         );
 
         CREATE TABLE IF NOT EXISTS statuses (
@@ -112,6 +116,25 @@ def init_db():
         );
         """
     )
+
+    # Migration: older databases have a stat_usage table without the `method`
+    # column. Recreate it so roll/option tracking works. Existing stat counts
+    # are intentionally dropped (the schema can't tell roll from option).
+    stat_cols = [r["name"] for r in conn.execute("PRAGMA table_info(stat_usage)")]
+    if stat_cols and "method" not in stat_cols:
+        conn.execute("DROP TABLE stat_usage")
+        conn.execute(
+            """
+            CREATE TABLE stat_usage (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+                stat_id   INTEGER NOT NULL REFERENCES lore_stats(id) ON DELETE CASCADE,
+                method    TEXT NOT NULL CHECK (method IN ('roll', 'option')),
+                count     INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (branch_id, stat_id, method)
+            )
+            """
+        )
 
     # Seed the fixed lore stats once, preserving their canonical order.
     # INSERT OR IGNORE keeps this idempotent even if init runs concurrently.

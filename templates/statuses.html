@@ -13,7 +13,7 @@
                 <th>Name</th>
                 <th>Description</th>
                 <th>Acquirable in</th>
-                <th></th>
+                {% if can_edit %}<th></th>{% endif %}
             </tr>
         </thead>
         <tbody>
@@ -28,12 +28,16 @@
                         <span class="muted">—</span>
                     {% endif %}
                 </td>
+                {% if can_edit %}
                 <td class="row-actions">
                     <a class="btn" href="{{ url_for('edit_status', status_id=s.id) }}">Edit</a>
+                    {% if can_admin %}
                     <button type="button" class="btn btn-danger"
                             data-delete-action="{{ url_for('delete_status', status_id=s.id) }}"
                             data-delete-label="status &quot;{{ s.name }}&quot;">Delete</button>
+                    {% endif %}
                 </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -43,6 +47,7 @@
     {% endif %}
 </section>
 
+{% if can_admin %}
 <section class="card">
     <h2>Add a status</h2>
     <form method="post" class="stacked-form">
@@ -70,4 +75,5 @@
         <button type="submit" class="btn btn-primary">Add status</button>
     </form>
 </section>
+{% endif %}
 {% endblock %}

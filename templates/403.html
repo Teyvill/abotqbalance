@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Not allowed — ABOT Lore Tracker{% endblock %}
+
+{% block content %}
+<h1>Not allowed</h1>
+<p class="muted">
+    Your role ({{ current_role or "none" }}) does not have permission to do
+    that. Readers can view, editors can edit existing data, and admins can
+    add and delete.
+</p>
+<p><a class="btn" href="{{ url_for('dashboard') }}">Back to dashboard</a></p>
+{% endblock %}

@@ -25,10 +25,12 @@
                 <td>{{ b.stat_total }}</td>
                 <td>{{ b.status_total }}</td>
                 <td class="row-actions">
-                    <a class="btn" href="{{ url_for('edit_branch', branch_id=b.id) }}">Edit</a>
+                    <a class="btn" href="{{ url_for('edit_branch', branch_id=b.id) }}">{{ "Edit" if can_edit else "View" }}</a>
+                    {% if can_admin %}
                     <button type="button" class="btn btn-danger"
                             data-delete-action="{{ url_for('delete_branch', branch_id=b.id) }}"
                             data-delete-label="branch &quot;{{ b.label }}&quot;">Delete</button>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -39,6 +41,7 @@
     {% endif %}
 </section>
 
+{% if can_admin %}
 <section class="card">
     <h2>Add a branch</h2>
     <form method="post" class="stacked-form" id="add-branch-form">
@@ -94,4 +97,5 @@
         sync();
     })();
 </script>
+{% endif %}
 {% endblock %}

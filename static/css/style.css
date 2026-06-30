@@ -40,6 +40,42 @@ body {
 
 .topbar nav a:hover { color: #fff; }
 
+.topbar .session-info {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+}
+.topbar .role-badge {
+    color: #cfd4dc;
+    background: #353b45;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    text-transform: capitalize;
+}
+.topbar .session-info a { color: #cfd4dc; text-decoration: none; }
+.topbar .session-info a:hover { color: #fff; }
+
+/* Login page */
+.login-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+}
+.login-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    width: 340px;
+    max-width: 90vw;
+}
+.login-card h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+.login-card .flash { margin-bottom: 0.75rem; }
+
 .content {
     max-width: 980px;
     margin: 0 auto;

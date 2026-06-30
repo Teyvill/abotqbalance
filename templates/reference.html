@@ -13,11 +13,13 @@
                 {% for boss in bosses %}
                 <tr>
                     <td>{{ boss.name }}</td>
+                    {% if can_admin %}
                     <td class="row-actions">
                         <button type="button" class="btn btn-danger"
                                 data-delete-action="{{ url_for('delete_boss', boss_id=boss.id) }}"
                                 data-delete-label="boss &quot;{{ boss.name }}&quot;">Delete</button>
                     </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
@@ -26,10 +28,12 @@
         <p class="empty">No bosses yet.</p>
         {% endif %}
 
+        {% if can_admin %}
         <form method="post" action="{{ url_for('add_boss') }}" class="add-row">
             <input type="text" name="name" placeholder="Boss name" required>
             <button type="submit" class="btn btn-primary">Add</button>
         </form>
+        {% endif %}
     </section>
 
     <section class="card">
@@ -40,11 +44,13 @@
                 {% for loc in locations %}
                 <tr>
                     <td>{{ loc.name }}</td>
+                    {% if can_admin %}
                     <td class="row-actions">
                         <button type="button" class="btn btn-danger"
                                 data-delete-action="{{ url_for('delete_location', location_id=loc.id) }}"
                                 data-delete-label="location &quot;{{ loc.name }}&quot;">Delete</button>
                     </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
@@ -53,10 +59,12 @@
         <p class="empty">No locations yet.</p>
         {% endif %}
 
+        {% if can_admin %}
         <form method="post" action="{{ url_for('add_location') }}" class="add-row">
             <input type="text" name="name" placeholder="Location name" required>
             <button type="submit" class="btn btn-primary">Add</button>
         </form>
+        {% endif %}
     </section>
 </div>
 {% endblock %}

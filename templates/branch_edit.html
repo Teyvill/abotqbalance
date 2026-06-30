@@ -1,26 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Edit branch — ABOT Lore Tracker{% endblock %}
+{% block title %}{{ "Edit" if can_edit else "View" }} branch — ABOT Lore Tracker{% endblock %}
 
 {% block content %}
 <p><a href="{{ url_for('branches') }}">&larr; Back to branches</a></p>
-<h1>Edit branch: {{ branch_label }}</h1>
+<h1>{{ "Edit" if can_edit else "View" }} branch: {{ branch_label }}</h1>
 <p class="muted">{{ branch.type | capitalize }} branch{% if branch.notes %} — {{ branch.notes }}{% endif %}</p>
 
 <form method="post">
-    <!-- Section 1: Lore stat usage -->
+    <!-- Section 1: skill usage (roll / option per skill) -->
     <section class="card">
-        <h2>1. Lore stat usage</h2>
+        <h2>1. Skill usage</h2>
+        <p class="muted">Times each skill is used, split by method.</p>
         <table class="data-table">
             <thead>
-                <tr><th>Stat</th><th>Count</th></tr>
+                <tr><th>Skill</th><th>Roll</th><th>Option</th></tr>
             </thead>
             <tbody>
                 {% for stat in stats %}
                 <tr>
                     <td>{{ stat.name }}</td>
                     <td>
-                        <input type="number" name="stat_{{ stat.id }}" min="0"
-                               value="{{ stat.count }}" class="count-input">
+                        <input type="number" name="stat_{{ stat.id }}_roll" min="0"
+                               value="{{ stat.roll }}" class="count-input"
+                               {% if not can_edit %}disabled{% endif %}>
+                    </td>
+                    <td>
+                        <input type="number" name="stat_{{ stat.id }}_option" min="0"
+                               value="{{ stat.opt }}" class="count-input"
+                               {% if not can_edit %}disabled{% endif %}>
                     </td>
                 </tr>
                 {% endfor %}
@@ -34,6 +41,7 @@
         <p class="muted">Statuses that are used in this branch and how often.</p>
 
         {% if all_statuses %}
+        {% if can_edit %}
         <div class="add-row">
             <select id="status-usage-picker">
                 {% for s in all_statuses %}
@@ -43,10 +51,11 @@
             <input type="number" id="status-usage-count" min="1" value="1" class="count-input">
             <button type="button" class="btn" id="status-usage-add">Add</button>
         </div>
+        {% endif %}
 
         <table class="data-table" id="status-usage-table">
             <thead>
-                <tr><th>Status</th><th>Count</th><th></th></tr>
+                <tr><th>Status</th><th>Count</th>{% if can_edit %}<th></th>{% endif %}</tr>
             </thead>
             <tbody>
                 {% for su in status_usages %}
@@ -57,19 +66,24 @@
                     </td>
                     <td>
                         <input type="number" name="status_usage_count" min="1"
-                               value="{{ su.count }}" class="count-input">
+                               value="{{ su.count }}" class="count-input"
+                               {% if not can_edit %}disabled{% endif %}>
                     </td>
+                    {% if can_edit %}
                     <td><button type="button" class="btn btn-danger row-remove">Remove</button></td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p class="empty">No statuses exist yet. Add some on the Statuses page first.</p>
+        <p class="empty">No statuses exist yet.</p>
         {% endif %}
     </section>
 
+    {% if can_edit %}
     <button type="submit" class="btn btn-primary">Save</button>
+    {% endif %}
 </form>
 
 <!-- Section 3: Status acquisition (read-only) -->
@@ -90,6 +104,7 @@
     {% endif %}
 </section>
 
+{% if can_edit %}
 <script>
     // Section 2: client-side add/remove of status usage rows before saving.
     (function () {
@@ -143,4 +158,5 @@
         });
     })();
 </script>
+{% endif %}
 {% endblock %}

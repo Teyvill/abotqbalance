@@ -14,11 +14,19 @@
         const branchType = panel.querySelector(".f-branch-type").value;
         const bossId = panel.querySelector(".f-boss").value;
         const locationId = panel.querySelector(".f-location").value;
-        return { branchType, bossId, locationId };
+        // The method filter only exists on the stats panel.
+        const methodSelect = panel.querySelector(".f-method");
+        const method = methodSelect ? methodSelect.value : "all";
+        return { branchType, bossId, locationId, method };
     }
 
     function isFiltered(f) {
-        return f.branchType !== "all" || f.bossId !== "" || f.locationId !== "";
+        return (
+            f.branchType !== "all" ||
+            f.bossId !== "" ||
+            f.locationId !== "" ||
+            f.method !== "all"
+        );
     }
 
     function buildQuery(f) {
@@ -26,6 +34,7 @@
         if (f.branchType !== "all") params.set("branch_type", f.branchType);
         if (f.bossId !== "") params.set("boss_id", f.bossId);
         if (f.locationId !== "") params.set("location_id", f.locationId);
+        if (f.method && f.method !== "all") params.set("method", f.method);
         return params.toString();
     }
 
