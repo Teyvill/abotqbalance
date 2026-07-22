@@ -53,22 +53,22 @@
             </select>
         </label>
 
+        <label id="location-field">
+            Location
+            <select name="location_id">
+                <option value="">Select a location</option>
+                {% for loc in locations %}
+                <option value="{{ loc.id }}">{{ loc.name or loc.code }}{% if loc.name %} ({{ loc.code }}){% endif %}</option>
+                {% endfor %}
+            </select>
+        </label>
+
         <label id="boss-field">
             Boss
             <select name="boss_id">
                 <option value="">Select a boss</option>
                 {% for boss in bosses %}
                 <option value="{{ boss.id }}">{{ boss.name }}</option>
-                {% endfor %}
-            </select>
-        </label>
-
-        <label id="location-field" hidden>
-            Location
-            <select name="location_id">
-                <option value="">Select a location</option>
-                {% for loc in locations %}
-                <option value="{{ loc.id }}">{{ loc.name }}</option>
                 {% endfor %}
             </select>
         </label>
@@ -83,15 +83,13 @@
 </section>
 
 <script>
-    // Toggle boss/location field based on the selected branch type.
+    // Personal branches need a boss; location branches do not. Every branch
+    // needs a location.
     (function () {
         const typeSelect = document.getElementById("branch-type-select");
         const bossField = document.getElementById("boss-field");
-        const locationField = document.getElementById("location-field");
         function sync() {
-            const isPersonal = typeSelect.value === "personal";
-            bossField.hidden = !isPersonal;
-            locationField.hidden = isPersonal;
+            bossField.hidden = typeSelect.value !== "personal";
         }
         typeSelect.addEventListener("change", sync);
         sync();

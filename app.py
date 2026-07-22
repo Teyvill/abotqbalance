@@ -8,6 +8,7 @@ the schema.
 
 import hmac
 import os
+import sqlite3
 from datetime import timedelta
 from functools import wraps
 
@@ -24,7 +25,15 @@ from flask import (
     url_for,
 )
 
-from db import METHODS, get_db, init_db
+from db import (
+    BOSS_TYPES,
+    CONTINENTS,
+    METHODS,
+    SECTORS,
+    SETTLEMENTS,
+    get_db,
+    init_db,
+)
 
 load_dotenv()
 
@@ -161,11 +170,41 @@ def logout():
 # Helpers
 # --------------------------------------------------------------------------
 
+def location_display(row):
+    """A location's display text: its name if set, otherwise its code."""
+    name = row["location_name"] if "location_name" in row.keys() else None
+    code = row["location_code"] if "location_code" in row.keys() else None
+    return name or code or "Unknown location"
+
+
 def branch_label(branch):
-    """Human-readable label for a branch row (boss or location name)."""
+    """Human-readable label for a branch row.
+
+    Personal: "Location - Boss (Personal)". Location: "Location".
+    """
+    location = location_display(branch)
     if branch["type"] == "personal":
-        return branch["boss_name"] or "Unknown boss"
-    return branch["location_name"] or "Unknown location"
+        boss = branch["boss_name"] or "Unknown boss"
+        return f"{location} - {boss} (Personal)"
+    return location
+
+
+def build_location_code(continent, sector, settlement):
+    """Compose a location code from its parts, or None if invalid.
+
+    Sector "Capital" -> continent capital; settlement "Capital" -> sector
+    capital; otherwise a plain settlement.
+    """
+    if continent not in CONTINENTS:
+        return None
+    if sector == "Capital":
+        return continent + "Capital"
+    if sector in SECTORS:
+        if settlement == "Capital":
+            return continent + sector + "Capital"
+        if settlement in SETTLEMENTS:
+            return continent + sector + settlement
+    return None
 
 
 def fetch_branches(conn):
@@ -176,6 +215,7 @@ def fetch_branches(conn):
             b.id, b.type, b.boss_id, b.location_id, b.notes,
             bo.name AS boss_name,
             lo.name AS location_name,
+            lo.code AS location_code,
             (SELECT COALESCE(SUM(count), 0) FROM stat_usage
                 WHERE branch_id = b.id) AS stat_total,
             (SELECT COALESCE(SUM(count), 0) FROM status_usage
@@ -222,8 +262,12 @@ def parse_filter_args():
 @app.route("/")
 def dashboard():
     conn = get_db()
-    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
-    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    bosses = conn.execute(
+        "SELECT * FROM bosses ORDER BY name COLLATE NOCASE"
+    ).fetchall()
+    locations = conn.execute(
+        "SELECT id, code, name FROM locations ORDER BY code COLLATE NOCASE"
+    ).fetchall()
     conn.close()
     return render_template("dashboard.html", bosses=bosses, locations=locations)
 
@@ -304,17 +348,16 @@ def branches():
             return redirect(url_for("branches"))
 
         boss_id = None
-        location_id = None
+        location_id = request.form.get("location_id", type=int)
+        if not location_id:
+            flash("Please choose a location for the branch.", "error")
+            conn.close()
+            return redirect(url_for("branches"))
         if branch_type == "personal":
+            # Personal branches tie a boss to a location.
             boss_id = request.form.get("boss_id", type=int)
             if not boss_id:
                 flash("Please choose a boss for a personal branch.", "error")
-                conn.close()
-                return redirect(url_for("branches"))
-        else:
-            location_id = request.form.get("location_id", type=int)
-            if not location_id:
-                flash("Please choose a location for a location branch.", "error")
                 conn.close()
                 return redirect(url_for("branches"))
 
@@ -329,8 +372,12 @@ def branches():
         return redirect(url_for("edit_branch", branch_id=new_id))
 
     branch_rows = fetch_branches(conn)
-    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
-    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    bosses = conn.execute(
+        "SELECT * FROM bosses ORDER BY name COLLATE NOCASE"
+    ).fetchall()
+    locations = conn.execute(
+        "SELECT id, code, name FROM locations ORDER BY code COLLATE NOCASE"
+    ).fetchall()
     conn.close()
 
     branch_list = [
@@ -349,7 +396,8 @@ def edit_branch(branch_id):
     conn = get_db()
     branch = conn.execute(
         """
-        SELECT b.*, bo.name AS boss_name, lo.name AS location_name
+        SELECT b.*, bo.name AS boss_name,
+               lo.name AS location_name, lo.code AS location_code
         FROM branches b
         LEFT JOIN bosses bo ON bo.id = b.boss_id
         LEFT JOIN locations lo ON lo.id = b.location_id
@@ -619,21 +667,52 @@ def delete_status(status_id):
 @app.route("/reference")
 def reference():
     conn = get_db()
-    bosses = conn.execute("SELECT * FROM bosses ORDER BY name").fetchall()
-    locations = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
+    # Each boss shows how many distinct locations it links to via its branches.
+    bosses = conn.execute(
+        """
+        SELECT bo.id, bo.name, bo.type,
+               (SELECT COUNT(DISTINCT b.location_id) FROM branches b
+                    WHERE b.boss_id = bo.id AND b.location_id IS NOT NULL)
+                   AS location_count
+        FROM bosses bo
+        ORDER BY bo.name COLLATE NOCASE
+        """
+    ).fetchall()
+    # Each location shows how many branches are linked to it.
+    locations = conn.execute(
+        """
+        SELECT l.id, l.code, l.name,
+               (SELECT COUNT(*) FROM branches b WHERE b.location_id = l.id)
+                   AS branch_count
+        FROM locations l
+        ORDER BY l.code COLLATE NOCASE
+        """
+    ).fetchall()
     conn.close()
-    return render_template("reference.html", bosses=bosses, locations=locations)
+    return render_template(
+        "reference.html",
+        bosses=bosses,
+        locations=locations,
+        continents=CONTINENTS,
+        sectors=SECTORS,
+        settlements=SETTLEMENTS,
+        boss_types=BOSS_TYPES,
+    )
 
 
 @app.route("/reference/bosses/add", methods=["POST"])
 @require_role("admin")
 def add_boss():
     name = request.form.get("name", "").strip()
+    boss_type = request.form.get("type")
     if not name:
         flash("A boss needs a name.", "error")
         return redirect(url_for("reference"))
+    if boss_type not in BOSS_TYPES:
+        flash("Please choose a boss type.", "error")
+        return redirect(url_for("reference"))
     conn = get_db()
-    conn.execute("INSERT INTO bosses (name) VALUES (?)", (name,))
+    conn.execute("INSERT INTO bosses (name, type) VALUES (?, ?)", (name, boss_type))
     conn.commit()
     conn.close()
     flash("Boss added.", "success")
@@ -654,15 +733,33 @@ def delete_boss(boss_id):
 @app.route("/reference/locations/add", methods=["POST"])
 @require_role("admin")
 def add_location():
+    continent = request.form.get("continent")
+    sector = request.form.get("sector")
+    settlement = request.form.get("settlement")
     name = request.form.get("name", "").strip()
-    if not name:
-        flash("A location needs a name.", "error")
+
+    code = build_location_code(continent, sector, settlement)
+    if not code:
+        flash("Please choose a valid continent, sector, and settlement.", "error")
         return redirect(url_for("reference"))
+
+    # Store the structured parts; sector/settlement are unset for capitals.
+    sector_value = sector if sector in SECTORS else None
+    settlement_value = settlement if settlement in SETTLEMENTS else None
+
     conn = get_db()
-    conn.execute("INSERT INTO locations (name) VALUES (?)", (name,))
-    conn.commit()
-    conn.close()
-    flash("Location added.", "success")
+    try:
+        conn.execute(
+            "INSERT INTO locations (code, name, continent, sector, settlement) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (code, name or None, continent, sector_value, settlement_value),
+        )
+        conn.commit()
+        flash(f"Location {code} added.", "success")
+    except sqlite3.IntegrityError:
+        flash(f"Location {code} already exists.", "error")
+    finally:
+        conn.close()
     return redirect(url_for("reference"))
 
 

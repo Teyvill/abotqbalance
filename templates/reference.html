@@ -9,10 +9,20 @@
         <h2>Bosses</h2>
         {% if bosses %}
         <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Linked locations</th>
+                    {% if can_admin %}<th></th>{% endif %}
+                </tr>
+            </thead>
             <tbody>
                 {% for boss in bosses %}
                 <tr>
                     <td>{{ boss.name }}</td>
+                    <td>{{ boss.type or "—" }}</td>
+                    <td>{{ boss.location_count }}</td>
                     {% if can_admin %}
                     <td class="row-actions">
                         <button type="button" class="btn btn-danger"
@@ -29,9 +39,20 @@
         {% endif %}
 
         {% if can_admin %}
-        <form method="post" action="{{ url_for('add_boss') }}" class="add-row">
-            <input type="text" name="name" placeholder="Boss name" required>
-            <button type="submit" class="btn btn-primary">Add</button>
+        <form method="post" action="{{ url_for('add_boss') }}" class="stacked-form add-form">
+            <label>
+                Name
+                <input type="text" name="name" required>
+            </label>
+            <label>
+                Type
+                <select name="type" required>
+                    {% for t in boss_types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary">Add boss</button>
         </form>
         {% endif %}
     </section>
@@ -40,15 +61,25 @@
         <h2>Locations</h2>
         {% if locations %}
         <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Branches</th>
+                    {% if can_admin %}<th></th>{% endif %}
+                </tr>
+            </thead>
             <tbody>
                 {% for loc in locations %}
                 <tr>
-                    <td>{{ loc.name }}</td>
+                    <td>{{ loc.code }}</td>
+                    <td>{{ loc.name or "—" }}</td>
+                    <td>{{ loc.branch_count }}</td>
                     {% if can_admin %}
                     <td class="row-actions">
                         <button type="button" class="btn btn-danger"
                                 data-delete-action="{{ url_for('delete_location', location_id=loc.id) }}"
-                                data-delete-label="location &quot;{{ loc.name }}&quot;">Delete</button>
+                                data-delete-label="location &quot;{{ loc.code }}&quot;">Delete</button>
                     </td>
                     {% endif %}
                 </tr>
@@ -60,11 +91,73 @@
         {% endif %}
 
         {% if can_admin %}
-        <form method="post" action="{{ url_for('add_location') }}" class="add-row">
-            <input type="text" name="name" placeholder="Location name" required>
-            <button type="submit" class="btn btn-primary">Add</button>
+        <form method="post" action="{{ url_for('add_location') }}" class="stacked-form add-form" id="add-location-form">
+            <label>
+                Continent
+                <select name="continent" id="loc-continent" required>
+                    {% for c in continents %}
+                    <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Sector
+                <select name="sector" id="loc-sector" required>
+                    <option value="Capital">Capital (continent capital)</option>
+                    {% for s in sectors %}
+                    <option value="{{ s }}">{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label id="loc-settlement-field">
+                Settlement
+                <select name="settlement" id="loc-settlement">
+                    <option value="Capital">Capital (sector capital)</option>
+                    {% for st in settlements %}
+                    <option value="{{ st }}">{{ st }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Name (optional)
+                <input type="text" name="name">
+            </label>
+            <p class="muted">Code: <strong id="loc-code-preview"></strong></p>
+            <button type="submit" class="btn btn-primary">Add location</button>
         </form>
         {% endif %}
     </section>
 </div>
+
+{% if can_admin %}
+<script>
+    // Live location-code preview and settlement visibility.
+    (function () {
+        const continent = document.getElementById("loc-continent");
+        const sector = document.getElementById("loc-sector");
+        const settlementField = document.getElementById("loc-settlement-field");
+        const settlement = document.getElementById("loc-settlement");
+        const preview = document.getElementById("loc-code-preview");
+        if (!continent) return;
+
+        function buildCode() {
+            const c = continent.value;
+            if (sector.value === "Capital") return c + "Capital";
+            if (settlement.value === "Capital") return c + sector.value + "Capital";
+            return c + sector.value + settlement.value;
+        }
+
+        function sync() {
+            // A continent capital has no settlement.
+            settlementField.hidden = sector.value === "Capital";
+            preview.textContent = buildCode();
+        }
+
+        [continent, sector, settlement].forEach(function (el) {
+            el.addEventListener("change", sync);
+        });
+        sync();
+    })();
+</script>
+{% endif %}
 {% endblock %}

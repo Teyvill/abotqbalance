@@ -34,6 +34,34 @@ LORE_STATS = [
 # Each skill's usage is tracked separately per method.
 METHODS = ("roll", "option")
 
+# Location building blocks. A location's code is composed from these; a
+# "Capital" at the sector level is a continent capital, and at the settlement
+# level a sector capital.
+CONTINENTS = ["Fo", "Mo", "Il"]
+SECTORS = ["Sector1", "Sector2", "Sector3"]
+SETTLEMENTS = ["Settlement1", "Settlement2"]
+
+# Bosses are either settled in a place or roaming nomads.
+BOSS_TYPES = ["Settled", "Nomad"]
+
+
+def seed_location_codes():
+    """Return the full set of seeded locations as (code, continent, sector,
+    settlement) tuples: continent capitals, sector capitals, and settlements."""
+    rows = []
+    for continent in CONTINENTS:
+        # Continent capital, e.g. FoCapital.
+        rows.append((continent + "Capital", continent, None, None))
+        for sector in SECTORS:
+            # Sector capital, e.g. FoSector1Capital.
+            rows.append((continent + sector + "Capital", continent, sector, None))
+            for settlement in SETTLEMENTS:
+                # Settlement, e.g. FoSector1Settlement1.
+                rows.append(
+                    (continent + sector + settlement, continent, sector, settlement)
+                )
+    return rows
+
 
 def get_db():
     """Open a connection with row access by column name and foreign keys on."""
@@ -70,12 +98,17 @@ def init_db():
 
         CREATE TABLE IF NOT EXISTS bosses (
             id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
+            name TEXT NOT NULL,
+            type TEXT
         );
 
         CREATE TABLE IF NOT EXISTS locations (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            code       TEXT NOT NULL UNIQUE,
+            name       TEXT,
+            continent  TEXT,
+            sector     TEXT,
+            settlement TEXT
         );
 
         CREATE TABLE IF NOT EXISTS branches (
@@ -136,12 +169,40 @@ def init_db():
             """
         )
 
+    # Migration: add the boss `type` column to older databases.
+    boss_cols = [r["name"] for r in conn.execute("PRAGMA table_info(bosses)")]
+    if boss_cols and "type" not in boss_cols:
+        conn.execute("ALTER TABLE bosses ADD COLUMN type TEXT")
+
+    # Migration: add the structured location columns to older databases.
+    loc_cols = [r["name"] for r in conn.execute("PRAGMA table_info(locations)")]
+    if loc_cols:
+        for col in ("code", "continent", "sector", "settlement"):
+            if col not in loc_cols:
+                conn.execute(f"ALTER TABLE locations ADD COLUMN {col} TEXT")
+
     # Seed the fixed lore stats once, preserving their canonical order.
     # INSERT OR IGNORE keeps this idempotent even if init runs concurrently.
     existing = conn.execute("SELECT COUNT(*) AS n FROM lore_stats").fetchone()["n"]
     if existing == 0:
         for name in LORE_STATS:
             conn.execute("INSERT OR IGNORE INTO lore_stats (name) VALUES (?)", (name,))
+
+    # Seed the full location set once, into an empty locations table. This
+    # covers every continent capital, sector capital, and settlement.
+    loc_count = conn.execute("SELECT COUNT(*) AS n FROM locations").fetchone()["n"]
+    if loc_count == 0:
+        for code, continent, sector, settlement in seed_location_codes():
+            conn.execute(
+                "INSERT INTO locations (code, continent, sector, settlement) "
+                "VALUES (?, ?, ?, ?)",
+                (code, continent, sector, settlement),
+            )
+        # One named capital to start with.
+        conn.execute(
+            "UPDATE locations SET name = ? WHERE code = ?",
+            ("Lindenmoor", "FoSector1Capital"),
+        )
 
     conn.commit()
     conn.close()

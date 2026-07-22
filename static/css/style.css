@@ -175,6 +175,7 @@ h2 { font-size: 1.15rem; }
 
 .count-input { width: 90px; padding: 0.35rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; }
 
+.add-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .add-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
 .add-row input { width: auto; flex: 1; margin-top: 0; }
 

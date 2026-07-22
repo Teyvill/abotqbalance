@@ -34,7 +34,7 @@
             <select class="f-location">
                 <option value="">All locations</option>
                 {% for loc in locations %}
-                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                <option value="{{ loc.id }}">{{ loc.name or loc.code }}</option>
                 {% endfor %}
             </select>
         </label>
@@ -78,7 +78,7 @@
             <select class="f-location">
                 <option value="">All locations</option>
                 {% for loc in locations %}
-                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                <option value="{{ loc.id }}">{{ loc.name or loc.code }}</option>
                 {% endfor %}
             </select>
         </label>
