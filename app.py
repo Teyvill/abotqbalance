@@ -763,6 +763,21 @@ def add_location():
     return redirect(url_for("reference"))
 
 
+@app.route("/reference/locations/<int:location_id>/name", methods=["POST"])
+@require_role("editor")
+def rename_location(location_id):
+    # The code is fixed; only the display name can be edited (or cleared).
+    name = request.form.get("name", "").strip()
+    conn = get_db()
+    conn.execute(
+        "UPDATE locations SET name = ? WHERE id = ?", (name or None, location_id)
+    )
+    conn.commit()
+    conn.close()
+    flash("Location name saved.", "success")
+    return redirect(url_for("reference"))
+
+
 @app.route("/reference/locations/<int:location_id>/delete", methods=["POST"])
 @require_role("admin")
 def delete_location(location_id):

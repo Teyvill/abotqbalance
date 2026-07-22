@@ -73,7 +73,19 @@
                 {% for loc in locations %}
                 <tr>
                     <td>{{ loc.code }}</td>
-                    <td>{{ loc.name or "—" }}</td>
+                    <td>
+                        {% if can_edit %}
+                        <form method="post"
+                              action="{{ url_for('rename_location', location_id=loc.id) }}"
+                              class="inline-name-form">
+                            <input type="text" name="name" value="{{ loc.name or '' }}"
+                                   placeholder="(no name)">
+                            <button type="submit" class="btn">Save</button>
+                        </form>
+                        {% else %}
+                        {{ loc.name or "—" }}
+                        {% endif %}
+                    </td>
                     <td>{{ loc.branch_count }}</td>
                     {% if can_admin %}
                     <td class="row-actions">
