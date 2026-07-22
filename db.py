@@ -174,12 +174,29 @@ def init_db():
     if boss_cols and "type" not in boss_cols:
         conn.execute("ALTER TABLE bosses ADD COLUMN type TEXT")
 
-    # Migration: add the structured location columns to older databases.
-    loc_cols = [r["name"] for r in conn.execute("PRAGMA table_info(locations)")]
-    if loc_cols:
-        for col in ("code", "continent", "sector", "settlement"):
-            if col not in loc_cols:
-                conn.execute(f"ALTER TABLE locations ADD COLUMN {col} TEXT")
+    # Migration: rebuild a legacy locations table. Old databases have a
+    # locations table with `name NOT NULL` and no `code` column; ALTER TABLE
+    # cannot drop the NOT NULL, so the seed (which has no name) would fail.
+    # Rebuild with the current schema. Legacy rows are test data with no code
+    # in the new model, so they are dropped (cascading to their branches).
+    loc_info = conn.execute("PRAGMA table_info(locations)").fetchall()
+    if loc_info:
+        col_names = [r["name"] for r in loc_info]
+        name_not_null = any(r["name"] == "name" and r["notnull"] for r in loc_info)
+        if "code" not in col_names or name_not_null:
+            conn.execute("DROP TABLE locations")
+            conn.execute(
+                """
+                CREATE TABLE locations (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    code       TEXT NOT NULL UNIQUE,
+                    name       TEXT,
+                    continent  TEXT,
+                    sector     TEXT,
+                    settlement TEXT
+                )
+                """
+            )
 
     # Seed the fixed lore stats once, preserving their canonical order.
     # INSERT OR IGNORE keeps this idempotent even if init runs concurrently.
