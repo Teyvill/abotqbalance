@@ -89,9 +89,13 @@
                     <td>{{ loc.branch_count }}</td>
                     {% if can_admin %}
                     <td class="row-actions">
+                        {% if loc.code in seeded_codes %}
+                        <span class="muted">Seeded</span>
+                        {% else %}
                         <button type="button" class="btn btn-danger"
                                 data-delete-action="{{ url_for('delete_location', location_id=loc.id) }}"
                                 data-delete-label="location &quot;{{ loc.code }}&quot;">Delete</button>
+                        {% endif %}
                     </td>
                     {% endif %}
                 </tr>

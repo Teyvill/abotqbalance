@@ -63,6 +63,16 @@ def seed_location_codes():
     return rows
 
 
+# The special World Pillar location, seeded alongside the scheme locations.
+WORLD_CODE = "World"
+WORLD_NAME = "World Pillar"
+
+# Codes of all seeded locations. These are protected: they cannot be deleted.
+SEEDED_LOCATION_CODES = frozenset(
+    [code for code, _c, _s, _st in seed_location_codes()] + [WORLD_CODE]
+)
+
+
 def get_db():
     """Open a connection with row access by column name and foreign keys on."""
     conn = sqlite3.connect(DB_PATH)
@@ -226,7 +236,7 @@ def init_db():
     # new and already-seeded databases.
     conn.execute(
         "INSERT OR IGNORE INTO locations (code, name) VALUES (?, ?)",
-        ("World", "World Pillar"),
+        (WORLD_CODE, WORLD_NAME),
     )
 
     conn.commit()

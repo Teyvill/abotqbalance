@@ -30,6 +30,7 @@ from db import (
     CONTINENTS,
     METHODS,
     SECTORS,
+    SEEDED_LOCATION_CODES,
     SETTLEMENTS,
     get_db,
     init_db,
@@ -697,6 +698,7 @@ def reference():
         sectors=SECTORS,
         settlements=SETTLEMENTS,
         boss_types=BOSS_TYPES,
+        seeded_codes=SEEDED_LOCATION_CODES,
     )
 
 
@@ -782,6 +784,13 @@ def rename_location(location_id):
 @require_role("admin")
 def delete_location(location_id):
     conn = get_db()
+    row = conn.execute(
+        "SELECT code FROM locations WHERE id = ?", (location_id,)
+    ).fetchone()
+    if row and row["code"] in SEEDED_LOCATION_CODES:
+        conn.close()
+        flash("Seeded locations cannot be deleted.", "error")
+        return redirect(url_for("reference"))
     conn.execute("DELETE FROM locations WHERE id = ?", (location_id,))
     conn.commit()
     conn.close()
