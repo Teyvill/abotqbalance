@@ -221,5 +221,13 @@ def init_db():
             ("Lindenmoor", "FoSector1Capital"),
         )
 
+    # The World Pillar is a special location with the fixed code "World" (no
+    # continent/sector/settlement). Added idempotently so it appears in both
+    # new and already-seeded databases.
+    conn.execute(
+        "INSERT OR IGNORE INTO locations (code, name) VALUES (?, ?)",
+        ("World", "World Pillar"),
+    )
+
     conn.commit()
     conn.close()
