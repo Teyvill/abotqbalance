@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Fill — {{ quest.name }}{% endblock %}
+
+{% block content %}
+<p>
+    <a href="{{ url_for('book.quest_config', quest_id=quest.id) }}">&larr; Configure</a>
+    &nbsp;|&nbsp;
+    <a href="{{ url_for('book.preview', quest_id=quest.id) }}">Preview &rarr;</a>
+</p>
+<h1>Fill: {{ quest.name }}</h1>
+<p class="muted">Write the <strong>consequence</strong>, not the event. The first and
+    last sentences are fixed and added automatically. Text supports {vars}.</p>
+
+{% if not has_base %}
+<div class="flash flash-error">Add a base decision and its options in
+    <a href="{{ url_for('book.quest_config', quest_id=quest.id) }}">Configure</a> first.</div>
+{% endif %}
+
+{% if can_edit %}
+<form method="post" action="{{ url_for('book.save_fill', quest_id=quest.id) }}">
+{% endif %}
+
+    {# ---- Base fragments: light + heavy per option ---- #}
+    {% for d in decisions if d.type == 'base' %}
+    <section class="card">
+        <h2>Base — {{ d.question }}</h2>
+        {% for o in d.options %}
+        <div class="fill-slot">
+            <h3>{{ o.label }}{% if o.bam_direction %} <span class="muted">({{ o.bam_direction }})</span>{% endif %}</h3>
+            <label>Light
+                <textarea name="base_{{ o.id }}_light" rows="2"
+                          placeholder="Consequence (light)"
+                          {% if not can_edit %}disabled{% endif %}>{{ o.light }}</textarea>
+            </label>
+            <label>Heavy (can be longer)
+                <textarea name="base_{{ o.id }}_heavy" rows="3"
+                          placeholder="Consequence (heavy)"
+                          {% if not can_edit %}disabled{% endif %}>{{ o.heavy }}</textarea>
+            </label>
+        </div>
+        {% else %}
+        <p class="empty">No options — add some in Configure.</p>
+        {% endfor %}
+    </section>
+    {% endfor %}
+
+    {# ---- Advanced / minor fragments ---- #}
+    {% for d in other_decisions %}
+    <section class="card">
+        <h2>{{ d.type|capitalize }} — {{ d.question }}</h2>
+        {% for o in d.options %}
+        <div class="fill-slot">
+            <h3>{{ o.label }}</h3>
+            <label>Consequence
+                <textarea name="mod_{{ o.id }}_text" rows="2"
+                          placeholder="Consequence"
+                          {% if not can_edit %}disabled{% endif %}>{{ o.text }}</textarea>
+            </label>
+            <div class="fill-modifiers">
+                <label>Modifies base option
+                    <select name="mod_{{ o.id }}_base" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">Any base option</option>
+                        {% for bo in base_options %}
+                        <option value="{{ bo.id }}" {% if bo.id == o.modifies_base_option_id %}selected{% endif %}>{{ bo.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Only when party state
+                    <select name="mod_{{ o.id }}_party" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">Any</option>
+                        {% for ps in party_states %}
+                        <option value="{{ ps }}" {% if ps == o.party_state %}selected{% endif %}>{{ ps }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+        </div>
+        {% else %}
+        <p class="empty">No options — add some in Configure.</p>
+        {% endfor %}
+    </section>
+    {% endfor %}
+
+{% if can_edit %}
+    <button type="submit" class="btn btn-primary">Save fragments</button>
+</form>
+{% endif %}
+{% endblock %}

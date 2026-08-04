@@ -186,6 +186,13 @@ h2 { font-size: 1.15rem; }
 .option-form { display: flex; gap: 0.4rem; align-items: center; margin: 0; flex-wrap: wrap; }
 .option-form input[type="text"] { min-width: 160px; padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; }
 .warn { color: var(--danger); font-size: 0.85rem; margin: 0.2rem 0; }
+.fill-slot { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.75rem; }
+.fill-slot h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.fill-slot textarea { width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 0.9rem; margin-top: 0.2rem; }
+.fill-slot label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+.fill-modifiers { display: flex; gap: 1rem; flex-wrap: wrap; }
+.fill-modifiers select { padding: 0.35rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; }
+.preview-text { font-size: 1.05rem; line-height: 1.6; background: var(--bg); padding: 1rem; border-radius: 6px; }
 .inline-name-form { display: flex; gap: 0.4rem; align-items: center; margin: 0; }
 .inline-name-form input { flex: 1; min-width: 90px; padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem; }
 .add-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }

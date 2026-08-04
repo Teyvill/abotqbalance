@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Preview — {{ quest.name }}{% endblock %}
+
+{% block content %}
+<p>
+    <a href="{{ url_for('book.quest_config', quest_id=quest.id) }}">&larr; Configure</a>
+    &nbsp;|&nbsp;
+    <a href="{{ url_for('book.fill', quest_id=quest.id) }}">Fill</a>
+</p>
+<h1>Preview: {{ quest.name }}</h1>
+<p class="muted">Pick a state and see the assembled location text live. Empty slots
+    and unknown {vars} are flagged.</p>
+
+{% if not base_decision %}
+<div class="flash flash-error">Add a base decision first.</div>
+{% else %}
+<form id="preview-form" data-endpoint="{{ url_for('book.preview_assemble', quest_id=quest.id) }}">
+    <section class="card">
+        <div class="filters" style="border:none;padding:0;margin:0;">
+            <label>Base answer
+                <select name="base_option_id">
+                    {% for o in base_decision.options %}
+                    <option value="{{ o.id }}">{{ o.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Base weight
+                <select name="base_weight">
+                    {% for w in weight_tiers %}
+                    <option value="{{ w }}">{{ w }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% if advanced_decision %}
+            <label>Advanced answer
+                <select name="advanced_option_id">
+                    <option value="">(none)</option>
+                    {% for o in advanced_decision.options %}
+                    <option value="{{ o.id }}">{{ o.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            {% for md in minor_decisions %}
+            <label>{{ md.question }}
+                <select name="minor_option_ids">
+                    <option value="">(none)</option>
+                    {% for o in md.options %}
+                    <option value="{{ o.id }}">{{ o.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endfor %}
+            <label>Party state
+                <select name="party_state">
+                    <option value="">Any</option>
+                    {% for ps in party_states %}
+                    <option value="{{ ps }}">{{ ps }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </section>
+</form>
+
+<section class="card">
+    <h2>Assembled text</h2>
+    <p id="preview-text" class="preview-text"></p>
+    <div id="preview-notes"></div>
+</section>
+
+<script>
+(function () {
+    const form = document.getElementById("preview-form");
+    const out = document.getElementById("preview-text");
+    const notes = document.getElementById("preview-notes");
+
+    function refresh() {
+        const data = new FormData(form);
+        fetch(form.dataset.endpoint, { method: "POST", body: data })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                out.textContent = d.text || "(empty)";
+                let msgs = [];
+                const empties = (d.slots || []).filter(function (s) { return !s.filled; });
+                if (empties.length) {
+                    msgs.push("Empty slots: " + empties.map(function (s) { return s.slot; }).join(", "));
+                }
+                if ((d.unknown_vars || []).length) {
+                    msgs.push("Unknown vars: " + d.unknown_vars.map(function (v) { return "{" + v + "}"; }).join(", "));
+                }
+                notes.innerHTML = msgs.map(function (m) {
+                    return '<p class="warn">' + m + "</p>";
+                }).join("");
+            });
+    }
+
+    form.querySelectorAll("select").forEach(function (sel) {
+        sel.addEventListener("change", refresh);
+    });
+    refresh();
+})();
+</script>
+{% endif %}
+{% endblock %}
