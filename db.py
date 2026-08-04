@@ -44,6 +44,32 @@ SETTLEMENTS = ["Settlement1", "Settlement2"]
 # Bosses are either settled in a place or roaming nomads.
 BOSS_TYPES = ["Settled", "Nomad"]
 
+# ---- Book of Tales enums (shared with the book blueprint) ----
+DECISION_TYPES = ["base", "advanced", "minor"]
+BAM_DIRECTIONS = ["benevolent", "ambitious", "malevolent"]
+WEIGHT_TIERS = ["light", "heavy"]
+QUEST_TIERS = ["pretender", "count", "duke", "king"]
+WORLD_SLOTS = ["setup", "ripple", "coda"]
+PARTY_STATES = [
+    "won_rule_together",
+    "won_one_king",
+    "won_fought_throne",
+    "won_refused",
+    "lost_serve_king",
+    "lost_died",
+    "never_met_king",
+]
+# Per-quest decision limits and per-decision option limits (app invariants).
+MAX_ADVANCED = 1
+MAX_MINOR = 3
+MIN_OPTIONS = 2
+MAX_OPTIONS = 5
+
+# Seeded default for the fixed closing sentence (editable in globals).
+DEFAULT_LAST_SENTENCE = (
+    "And so the tale was told, as all tales are, by those who lived to tell it."
+)
+
 
 def seed_location_codes():
     """Return the full set of seeded locations as (code, continent, sector,
@@ -157,6 +183,93 @@ def init_db():
             count     INTEGER NOT NULL DEFAULT 0,
             UNIQUE (branch_id, status_id)
         );
+
+        -- ----------------------------------------------------------------
+        -- Book of Tales editor. All tables are namespaced with book_ and
+        -- reference the existing branches table for quest branch pairing.
+        -- ----------------------------------------------------------------
+
+        -- A quest pairs one personal branch and one locational branch (both
+        -- from the existing branches table used for lore-stat tracking).
+        CREATE TABLE IF NOT EXISTS book_quests (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                   TEXT NOT NULL,
+            personal_branch_id     INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+            locational_branch_id   INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+            first_sentence         TEXT NOT NULL DEFAULT '',
+            last_sentence_override TEXT,
+            tier                   TEXT,   -- pretender/count/duke/king
+            external_ref           TEXT,   -- StoryFlow file/project id
+            created_at             TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at             TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (personal_branch_id, locational_branch_id)
+        );
+
+        -- Substitution variables per quest: {loc}, {giant}, {npc}, {tree}...
+        CREATE TABLE IF NOT EXISTS book_quest_vars (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            quest_id INTEGER NOT NULL REFERENCES book_quests(id) ON DELETE CASCADE,
+            key      TEXT NOT NULL,
+            value    TEXT NOT NULL,
+            UNIQUE (quest_id, key)
+        );
+
+        -- A question. App invariant: exactly 1 base, 0..1 advanced, 0..3 minor.
+        CREATE TABLE IF NOT EXISTS book_decisions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            quest_id   INTEGER NOT NULL REFERENCES book_quests(id) ON DELETE CASCADE,
+            type       TEXT NOT NULL CHECK (type IN ('base', 'advanced', 'minor')),
+            question   TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0
+        );
+
+        -- An answer option. App invariant: 2..5 options per decision.
+        CREATE TABLE IF NOT EXISTS book_options (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            decision_id   INTEGER NOT NULL REFERENCES book_decisions(id) ON DELETE CASCADE,
+            label         TEXT NOT NULL,
+            bam_direction TEXT CHECK (bam_direction IN ('benevolent', 'ambitious', 'malevolent')),
+            sort_order    INTEGER DEFAULT 0
+        );
+
+        -- A consequence sentence attached to an option.
+        CREATE TABLE IF NOT EXISTS book_fragments (
+            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+            option_id               INTEGER NOT NULL REFERENCES book_options(id) ON DELETE CASCADE,
+            text                    TEXT NOT NULL,
+            weight_tier             TEXT CHECK (weight_tier IN ('light', 'heavy')),
+            modifies_base_option_id INTEGER REFERENCES book_options(id) ON DELETE CASCADE,
+            party_state             TEXT,
+            sort_order              INTEGER DEFAULT 0
+        );
+
+        -- Global: party ending (panel 1).
+        CREATE TABLE IF NOT EXISTS book_party_endings (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            state         TEXT NOT NULL CHECK (state IN (
+                              'won_rule_together', 'won_one_king', 'won_fought_throne',
+                              'won_refused', 'lost_serve_king', 'lost_died',
+                              'never_met_king')),
+            bam_direction TEXT,
+            text          TEXT NOT NULL,
+            sort_order    INTEGER DEFAULT 0
+        );
+
+        -- Global: world fragments (panel 5), assembled from run aggregates.
+        CREATE TABLE IF NOT EXISTS book_world_fragments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot            TEXT NOT NULL CHECK (slot IN ('setup', 'ripple', 'coda')),
+            condition_key   TEXT NOT NULL,
+            condition_value TEXT NOT NULL,
+            text            TEXT NOT NULL,
+            sort_order      INTEGER DEFAULT 0
+        );
+
+        -- Global key/value store (e.g. default_last_sentence).
+        CREATE TABLE IF NOT EXISTS book_globals (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
         """
     )
 
@@ -237,6 +350,12 @@ def init_db():
     conn.execute(
         "INSERT OR IGNORE INTO locations (code, name) VALUES (?, ?)",
         (WORLD_CODE, WORLD_NAME),
+    )
+
+    # Seed the default closing sentence for the Book of Tales (editable later).
+    conn.execute(
+        "INSERT OR IGNORE INTO book_globals (key, value) VALUES (?, ?)",
+        ("default_last_sentence", DEFAULT_LAST_SENTENCE),
     )
 
     conn.commit()
