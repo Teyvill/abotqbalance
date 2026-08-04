@@ -24,6 +24,7 @@ from flask import (
 )
 
 from auth import authenticate, has_role, load_credentials, require_role
+from book import book as book_blueprint
 from db import (
     BOSS_TYPES,
     CONTINENTS,
@@ -43,6 +44,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "abot-dev-secret-key")
 app.permanent_session_lifetime = timedelta(hours=24)
 
 init_db()
+
+# Book of Tales editor lives in its own blueprint under /book.
+app.register_blueprint(book_blueprint)
 
 
 # --------------------------------------------------------------------------

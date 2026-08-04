@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Configure — {{ quest.name }}{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('book.quests') }}">&larr; Back to quests</a></p>
+<h1>{{ quest.name }}</h1>
+
+{# ---------- Quest details ---------- #}
+<section class="card">
+    <h2>Quest details</h2>
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('book.update_quest', quest_id=quest.id) }}"
+          class="stacked-form">
+        <label>
+            Name
+            <input type="text" name="name" value="{{ quest.name }}" required>
+        </label>
+        <label>
+            Personal branch
+            <select name="personal_branch_id">
+                <option value="">(none)</option>
+                {% for b in personal_branches %}
+                <option value="{{ b.id }}" {% if b.id == quest.personal_branch_id %}selected{% endif %}>{{ b.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Locational branch
+            <select name="locational_branch_id">
+                <option value="">(none)</option>
+                {% for b in locational_branches %}
+                <option value="{{ b.id }}" {% if b.id == quest.locational_branch_id %}selected{% endif %}>{{ b.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Tier
+            <select name="tier">
+                <option value="">(none)</option>
+                {% for t in tiers %}
+                <option value="{{ t }}" {% if t == quest.tier %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            First sentence (fixed opener; states the location; supports {vars})
+            <textarea name="first_sentence" rows="2">{{ quest.first_sentence }}</textarea>
+        </label>
+        <label>
+            Last sentence override (leave blank to use the global default moral)
+            <textarea name="last_sentence_override" rows="2">{{ quest.last_sentence_override or "" }}</textarea>
+        </label>
+        <label>
+            External reference (StoryFlow file/project id, optional)
+            <input type="text" name="external_ref" value="{{ quest.external_ref or '' }}">
+        </label>
+        <button type="submit" class="btn btn-primary">Save quest</button>
+    </form>
+    {% else %}
+    <p class="muted">First sentence: {{ quest.first_sentence or "—" }}</p>
+    {% endif %}
+
+    {% if can_admin %}
+    <form method="post" action="{{ url_for('book.delete_quest', quest_id=quest.id) }}"
+          onsubmit="return confirm('Delete this quest and all its data?');"
+          style="margin-top:1rem;">
+        <button type="submit" class="btn btn-danger">Delete quest</button>
+    </form>
+    {% endif %}
+</section>
+
+{# ---------- Variables ---------- #}
+<section class="card">
+    <h2>Variables</h2>
+    <p class="muted">Substitutions like {loc}, {giant}, {npc}, {tree} used in text.</p>
+    {% if variables %}
+    <table class="data-table">
+        <thead><tr><th>Key</th><th>Value</th>{% if can_admin %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+            {% for v in variables %}
+            <tr>
+                <td><code>{{ "{" }}{{ v.key }}{{ "}" }}</code></td>
+                <td>{{ v.value }}</td>
+                {% if can_admin %}
+                <td class="row-actions">
+                    <form method="post" action="{{ url_for('book.delete_var', var_id=v.id) }}">
+                        <button type="submit" class="btn btn-danger">Remove</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No variables yet.</p>
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('book.add_var', quest_id=quest.id) }}" class="add-row">
+        <input type="text" name="key" placeholder="key (e.g. loc)" required>
+        <input type="text" name="value" placeholder="value (e.g. Lindenmoor)" required>
+        <button type="submit" class="btn btn-primary">Add</button>
+    </form>
+    {% endif %}
+</section>
+
+{# ---------- Decisions ---------- #}
+<section class="card">
+    <h2>Decisions &amp; options</h2>
+    <p class="muted">Exactly 1 base, up to 1 advanced, up to 3 minor. Each decision
+        has {{ min_options }}&ndash;{{ max_options }} options.</p>
+
+    {% if counts.base == 0 %}
+    <div class="flash flash-error">This quest has no base decision yet — add one below.</div>
+    {% endif %}
+
+    {% for d in decisions %}
+    <div class="decision-block">
+        <div class="decision-head">
+            <span class="pill pill-{{ d.type }}">{{ d.type }}</span>
+            {% if can_edit %}
+            <form method="post" action="{{ url_for('book.update_decision', decision_id=d.id) }}"
+                  class="inline-name-form">
+                <input type="text" name="question" value="{{ d.question }}" required>
+                <button type="submit" class="btn">Save</button>
+            </form>
+            {% else %}
+            <strong>{{ d.question }}</strong>
+            {% endif %}
+            {% if can_admin %}
+            <form method="post" action="{{ url_for('book.delete_decision', decision_id=d.id) }}"
+                  onsubmit="return confirm('Delete this decision and its options?');">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if d.options|length < min_options %}
+        <p class="warn">Needs at least {{ min_options }} options.</p>
+        {% endif %}
+
+        <table class="data-table">
+            <thead>
+                <tr><th>Label (internal)</th>{% if d.type == 'base' %}<th>BAM direction</th>{% endif %}{% if can_edit %}<th></th>{% endif %}</tr>
+            </thead>
+            <tbody>
+                {% for o in d.options %}
+                <tr>
+                    {% if can_edit %}
+                    <td colspan="{% if d.type == 'base' %}2{% else %}1{% endif %}">
+                        <form method="post" action="{{ url_for('book.update_option', option_id=o.id) }}"
+                              class="option-form">
+                            <input type="text" name="label" value="{{ o.label }}" required>
+                            {% if d.type == 'base' %}
+                            <select name="bam_direction">
+                                <option value="">(no direction)</option>
+                                {% for dir in bam_directions %}
+                                <option value="{{ dir }}" {% if dir == o.bam_direction %}selected{% endif %}>{{ dir }}</option>
+                                {% endfor %}
+                            </select>
+                            {% endif %}
+                            <button type="submit" class="btn">Save</button>
+                        </form>
+                    </td>
+                    <td class="row-actions">
+                        {% if can_admin %}
+                        <form method="post" action="{{ url_for('book.delete_option', option_id=o.id) }}">
+                            <button type="submit" class="btn btn-danger">Remove</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                    {% else %}
+                    <td>{{ o.label }}</td>
+                    {% if d.type == 'base' %}<td>{{ o.bam_direction or "—" }}</td>{% endif %}
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if can_edit and d.options|length < max_options %}
+        <form method="post" action="{{ url_for('book.add_option', decision_id=d.id) }}" class="add-row">
+            <input type="text" name="label" placeholder="option label" required>
+            {% if d.type == 'base' %}
+            <select name="bam_direction">
+                <option value="">(no direction)</option>
+                {% for dir in bam_directions %}
+                <option value="{{ dir }}">{{ dir }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <button type="submit" class="btn">Add option</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('book.add_decision', quest_id=quest.id) }}"
+          class="add-row" style="margin-top:1rem;">
+        <select name="type">
+            {% for t in decision_types %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="question" placeholder="Question (e.g. What became of the Aval Tree?)" required>
+        <button type="submit" class="btn btn-primary">Add decision</button>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

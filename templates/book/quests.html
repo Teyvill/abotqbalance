@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Book of Tales — Quests{% endblock %}
+
+{% block content %}
+<h1>Book of Tales</h1>
+<p class="muted">Quests pair a personal branch with a locational branch. Configure
+their endings, fill in consequence sentences, then preview the assembled text.</p>
+
+<section class="card">
+    <h2>Quests</h2>
+    {% if quests %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Tier</th>
+                <th>Decisions</th>
+                <th>Fragments</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quests %}
+            <tr>
+                <td>{{ q.name }}</td>
+                <td>{{ q.tier or "—" }}</td>
+                <td>{{ q.decision_count }}</td>
+                <td>{{ q.fragment_count }}</td>
+                <td class="row-actions">
+                    <a class="btn" href="{{ url_for('book.quest_config', quest_id=q.id) }}">
+                        {{ "Configure" if can_edit else "View" }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No quests yet.</p>
+    {% endif %}
+</section>
+
+{% if can_edit %}
+<section class="card">
+    <h2>New quest</h2>
+    <form method="post" action="{{ url_for('book.create_quest') }}" class="stacked-form">
+        <label>
+            Name
+            <input type="text" name="name" required>
+        </label>
+        <label>
+            Personal branch
+            <select name="personal_branch_id">
+                <option value="">(none)</option>
+                {% for b in personal_branches %}
+                <option value="{{ b.id }}">{{ b.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Locational branch
+            <select name="locational_branch_id">
+                <option value="">(none)</option>
+                {% for b in locational_branches %}
+                <option value="{{ b.id }}">{{ b.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Tier (optional)
+            <select name="tier">
+                <option value="">(none)</option>
+                {% for t in tiers %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            First sentence (fixed opener; states the location; supports {vars})
+            <textarea name="first_sentence" rows="2"></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary">Create quest</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

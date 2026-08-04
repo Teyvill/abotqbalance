@@ -175,6 +175,17 @@ h2 { font-size: 1.15rem; }
 
 .count-input { width: 90px; padding: 0.35rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; }
 
+/* Book of Tales */
+.decision-block { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.decision-head { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.decision-head form { margin: 0; }
+.pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; }
+.pill-base { background: var(--primary); }
+.pill-advanced { background: #6b46c1; }
+.pill-minor { background: #6b7280; }
+.option-form { display: flex; gap: 0.4rem; align-items: center; margin: 0; flex-wrap: wrap; }
+.option-form input[type="text"] { min-width: 160px; padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; }
+.warn { color: var(--danger); font-size: 0.85rem; margin: 0.2rem 0; }
 .inline-name-form { display: flex; gap: 0.4rem; align-items: center; margin: 0; }
 .inline-name-form input { flex: 1; min-width: 90px; padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem; }
 .add-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
